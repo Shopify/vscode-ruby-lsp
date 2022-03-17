@@ -1,42 +1,16 @@
 import * as vscode from "vscode";
-import {
-  LanguageClientOptions,
-  LanguageClient,
-  ServerOptions,
-} from "vscode-languageclient/node";
 
-const LSP_NAME = "Ruby LSP";
+import Client from "./client";
 
-let client: LanguageClient;
+let client: Client;
 
-export function activate(_context: vscode.ExtensionContext) {
-  const executable = {
-    command: "bundle",
-    args: ["exec", "ruby-lsp"],
-    options: {
-      cwd: vscode.workspace.workspaceFolders![0].uri.fsPath,
-    },
-  };
-
-  const serverOptions: ServerOptions = {
-    run: executable,
-    debug: executable,
-  };
-
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "ruby" }],
-    diagnosticCollectionName: LSP_NAME,
-  };
-
-  client = new LanguageClient(LSP_NAME, serverOptions, clientOptions);
-
-  client.start();
+export async function activate(context: vscode.ExtensionContext) {
+  client = new Client(context);
+  await client.start();
 }
 
-export function deactivate() {
-  if (!client) {
-    return undefined;
+export async function deactivate() {
+  if (client) {
+    await client.stop();
   }
-
-  return client.stop();
 }
