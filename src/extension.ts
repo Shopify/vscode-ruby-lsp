@@ -8,7 +8,11 @@ export async function activate(context: vscode.ExtensionContext) {
   activateRuby();
 
   client = new Client(context);
-  await client.start();
+
+  // Adding this delay guarantees that shadowenv has enough time to load the right environment
+  setTimeout(async () => {
+    await client.start();
+  }, 500);
 }
 
 function activateRuby() {
