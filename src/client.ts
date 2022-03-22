@@ -1,4 +1,5 @@
-import { execSync } from "child_process";
+import { exec } from "child_process";
+import { promisify } from "util";
 
 import * as vscode from "vscode";
 import {
@@ -7,6 +8,7 @@ import {
   ServerOptions,
 } from "vscode-languageclient/node";
 
+const asyncExec = promisify(exec);
 const LSP_NAME = "Ruby LSP";
 
 export default class Client {
@@ -55,7 +57,7 @@ export default class Client {
   }
 
   private async gemMissing(): Promise<boolean> {
-    const bundledGems = this.execInPath("bundle list");
+    const bundledGems = await this.execInPath("bundle list");
 
     if (bundledGems.includes("ruby-lsp")) {
       return false;
@@ -68,8 +70,8 @@ export default class Client {
     );
 
     if (response === "Run bundle add and install") {
-      this.execInPath("bundle add ruby-lsp");
-      this.execInPath("bundle install");
+      await this.execInPath("bundle add ruby-lsp");
+      await this.execInPath("bundle install");
       return false;
     }
 
@@ -77,7 +79,7 @@ export default class Client {
   }
 
   private async gemNotInstalled(): Promise<boolean> {
-    const bundlerCheck = this.execInPath("bundle check");
+    const bundlerCheck = await this.execInPath("bundle check");
 
     if (bundlerCheck.includes("The Gemfile's dependencies are satisfied")) {
       return false;
@@ -90,16 +92,18 @@ export default class Client {
     );
 
     if (response === "Run bundle install") {
-      this.execInPath("bundle install");
+      await this.execInPath("bundle install");
       return false;
     }
 
     return true;
   }
 
-  private execInPath(command: string): string {
-    return execSync(command, {
+  private async execInPath(command: string): Promise<string> {
+    const result = await asyncExec(command, {
       cwd: this.workingFolder,
-    }).toString();
+    });
+
+    return result.stdout;
   }
 }
