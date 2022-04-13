@@ -34,7 +34,24 @@
         "command": "ruby-lsp.stop",
         "title": "Ruby LSP: Stop"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Ruby LSP",
+      "properties": {
+        "rubyLsp.enabledFeatures": {
+          "description": "List of enabled LSP features",
+          "type": "object",
+          "default": {
+            "documentSymbols": true,
+            "foldingRanges": true,
+            "semanticHighlighting": true,
+            "formatting": true,
+            "diagnostics": true,
+            "codeActions": true
+          }
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run esbuild-base --minify",
