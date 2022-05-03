@@ -4,6 +4,7 @@ export interface TelemetryEvent {
   request: string;
   requestTime: number;
   lspVersion: string;
+  uri?: string;
 }
 
 export interface TelemetryApi {

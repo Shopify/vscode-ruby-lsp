@@ -29,6 +29,7 @@ suite("Telemetry", () => {
       request: "textDocument/foldingRanges",
       requestTime: 0.005,
       lspVersion: "1.0.0",
+      uri: "file:///test.rb",
     };
 
     await telemetry.sendEvent(event);
@@ -48,6 +49,7 @@ suite("Telemetry", () => {
       request: "textDocument/foldingRanges",
       requestTime: 0.005,
       lspVersion: "1.0.0",
+      uri: "file:///test.rb",
     };
 
     await telemetry.initialize();
