@@ -18,9 +18,9 @@ class DevelopmentApi implements TelemetryApi {
 }
 
 export class Telemetry {
-  private api: TelemetryApi | undefined;
+  private api?: TelemetryApi;
 
-  constructor(api: TelemetryApi | undefined, context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext, api?: TelemetryApi) {
     if (context.extensionMode === vscode.ExtensionMode.Development && !api) {
       this.api = new DevelopmentApi();
     } else {
@@ -30,13 +30,9 @@ export class Telemetry {
 
   async initialize() {
     try {
-      const api = await vscode.commands.executeCommand(
+      this.api = await vscode.commands.executeCommand(
         "ruby-lsp.getPrivateTelemetryApi"
       );
-
-      if (api) {
-        this.api = api as unknown as TelemetryApi;
-      }
     } catch (_error) {
       // Do nothing if no telemetry api is available
     }
@@ -49,6 +45,6 @@ export class Telemetry {
   }
 
   enabled(): boolean {
-    return this.api !== undefined;
+    return Boolean(this.api);
   }
 }

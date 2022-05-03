@@ -19,9 +19,12 @@ class FakeApi implements TelemetryApi {
 suite("Telemetry", () => {
   test("Events are sent via the defined API", async () => {
     const api = new FakeApi();
-    const telemetry = new Telemetry(api, {
-      extensionMode: vscode.ExtensionMode.Production,
-    } as vscode.ExtensionContext);
+    const telemetry = new Telemetry(
+      {
+        extensionMode: vscode.ExtensionMode.Production,
+      } as vscode.ExtensionContext,
+      api
+    );
     const event: TelemetryEvent = {
       request: "textDocument/foldingRanges",
       requestTime: 0.005,
@@ -38,7 +41,7 @@ suite("Telemetry", () => {
       "ruby-lsp.getPrivateTelemetryApi",
       () => api
     );
-    const telemetry = new Telemetry(undefined, {
+    const telemetry = new Telemetry({
       extensionMode: vscode.ExtensionMode.Production,
     } as vscode.ExtensionContext);
     const event: TelemetryEvent = {

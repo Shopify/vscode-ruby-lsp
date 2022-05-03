@@ -8,7 +8,7 @@ let client: Client;
 export async function activate(context: vscode.ExtensionContext) {
   activateRuby();
 
-  const telemetry = new Telemetry(undefined, context);
+  const telemetry = new Telemetry(context);
   await telemetry.initialize();
 
   client = new Client(context, telemetry);
