@@ -22,6 +22,7 @@ class DevelopmentApi implements TelemetryApi {
 
 export class Telemetry {
   private api?: TelemetryApi;
+  private initializationAttempts = 0;
 
   constructor(context: vscode.ExtensionContext, api?: TelemetryApi) {
     if (context.extensionMode === vscode.ExtensionMode.Development && !api) {
@@ -31,23 +32,29 @@ export class Telemetry {
     }
   }
 
-  async initialize() {
+  async sendEvent(event: TelemetryEvent) {
+    if (await this.initialize()) {
+      return this.api!.sendEvent(event);
+    }
+  }
+
+  private async initialize(): Promise<boolean> {
+    if (this.initializationAttempts > 5) {
+      return false;
+    }
+
     try {
-      this.api = await vscode.commands.executeCommand(
-        "ruby-lsp.getPrivateTelemetryApi"
-      );
+      if (!this.api) {
+        this.api = await vscode.commands.executeCommand(
+          "ruby-lsp.getPrivateTelemetryApi"
+        );
+        this.initializationAttempts++;
+      }
+
+      return Boolean(this.api);
     } catch (_error) {
       // Do nothing if no telemetry api is available
+      return false;
     }
-  }
-
-  async sendEvent(event: TelemetryEvent) {
-    if (this.api) {
-      return this.api.sendEvent(event);
-    }
-  }
-
-  enabled(): boolean {
-    return Boolean(this.api);
   }
 }
