@@ -22,7 +22,6 @@ class DevelopmentApi implements TelemetryApi {
 
 export class Telemetry {
   private api?: TelemetryApi;
-  private initializationAttempts = 0;
 
   constructor(context: vscode.ExtensionContext, api?: TelemetryApi) {
     if (context.extensionMode === vscode.ExtensionMode.Development && !api) {
@@ -39,16 +38,11 @@ export class Telemetry {
   }
 
   private async initialize(): Promise<boolean> {
-    if (this.initializationAttempts > 5) {
-      return false;
-    }
-
     try {
       if (!this.api) {
         this.api = await vscode.commands.executeCommand(
           "ruby-lsp.getPrivateTelemetryApi"
         );
-        this.initializationAttempts++;
       }
 
       return Boolean(this.api);
