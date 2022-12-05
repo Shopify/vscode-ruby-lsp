@@ -10,7 +10,7 @@ Companion VS Code extension for the [Ruby LSP gem](https://github.com/Shopify/ru
 
 ## Usage
 
-Search for `ruby-lsp` in the extensions tab and click install.
+Search for `ruby-lsp` in the extensions tab and click install. You may also need to set `rubyLsp.rubyVersionManager` in vscode to ensure that the extension loads with the correct Ruby environment.
 
 ### Configuration
 
@@ -42,6 +42,8 @@ default shell.
 ```jsonc
 "rubyLsp.rubyVersionManager": "chruby" // The handle for the version manager (e.g.: chruby, shadowenv)
 ```
+
+We use this ruby version manager to re-activate the Ruby version, gem paths and bundler paths so that it points to the right thing when you switch projects.
 
 ### Commands
 
