@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, ExecOptions } from "child_process";
 import { promisify } from "util";
 import { readFile } from "fs/promises";
 
@@ -40,9 +40,7 @@ export class Ruby {
           break;
       }
 
-      await this.delay(500);
-      await this.displayRubyVersion();
-      this.checkYjit();
+      vscode.window.setStatusBarMessage(`Ruby ${this.rubyVersion}`);
     } catch (error: any) {
       vscode.window.showErrorMessage(
         `Failed to activate ${this.versionManager} environment: ${error.message}`
@@ -51,9 +49,13 @@ export class Ruby {
   }
 
   private async activateShadowenv() {
-    await vscode.extensions
-      .getExtension("shopify.vscode-shadowenv")
-      ?.activate();
+    const shadowenv = vscode.extensions.getExtension(
+      "shopify.vscode-shadowenv"
+    );
+
+    await shadowenv?.activate();
+    await this.delay(500);
+    await this.analyze("ruby");
   }
 
   private async activateChruby() {
@@ -80,19 +82,28 @@ export class Ruby {
         break;
     }
 
-    const result = await asyncExec(
-      `source ${shellProfilePath} > /dev/null 2>&1 && ${ruby} -rjson -e "puts JSON.dump(ENV.to_h)"`,
+    // eslint-disable-next-line no-process-env
+    process.env = await this.analyze(
+      `source ${shellProfilePath} > /dev/null 2>&1 && ${ruby}`,
       { shell, cwd: this.workingFolder }
     );
-
-    // eslint-disable-next-line no-process-env
-    process.env = JSON.parse(result.stdout);
   }
 
-  private async displayRubyVersion() {
-    const rubyVersion = await asyncExec('ruby -e "puts RUBY_VERSION"');
-    this.rubyVersion = rubyVersion.stdout.trim();
-    vscode.window.setStatusBarMessage(`Ruby ${this.rubyVersion}`);
+  private async analyze(
+    ruby: string,
+    opts?: ExecOptions
+  ): Promise<{ [key: string]: string }> {
+    const result = await asyncExec(
+      `${ruby} -rjson -e "puts JSON.dump(env: ENV.to_h, version: RUBY_VERSION, yjit: defined?(RubyVM::YJIT))"`,
+      { ...opts, encoding: "utf-8" }
+    );
+
+    const info = JSON.parse(result.stdout);
+
+    this.rubyVersion = info.version;
+    this.yjitEnabled = info.yjit === "constant";
+
+    return info.env;
   }
 
   private async readRubyVersion() {
@@ -110,14 +121,6 @@ export class Ruby {
         throw error;
       }
     }
-  }
-
-  private async checkYjit() {
-    const yjitIsDefined = await asyncExec(
-      'ruby -e "puts defined?(RubyVM::YJIT)"'
-    );
-
-    this.yjitEnabled = yjitIsDefined.stdout.trim() === "constant";
   }
 
   private async delay(mseconds: number) {
