@@ -36,7 +36,7 @@ export class Ruby {
           await this.activate("rvm-auto-ruby");
           break;
         default:
-          await this.activateShadowenv();
+          await this.activateFallback();
           break;
       }
 
@@ -48,13 +48,16 @@ export class Ruby {
     }
   }
 
-  private async activateShadowenv() {
+  private async activateFallback() {
     const shadowenv = vscode.extensions.getExtension(
       "shopify.vscode-shadowenv"
     );
 
-    await shadowenv?.activate();
-    await this.delay(500);
+    if (shadowenv) {
+      await shadowenv.activate();
+      await this.delay(500);
+    }
+
     await this.analyze("ruby");
   }
 
