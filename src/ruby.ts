@@ -58,7 +58,7 @@ export class Ruby {
       await this.delay(500);
     }
 
-    await this.analyze("ruby");
+    await this.collectRubyInformation("ruby");
   }
 
   private async activateChruby() {
@@ -66,7 +66,7 @@ export class Ruby {
     await this.activate(`chruby-exec "${rubyVersion}" -- ruby`);
   }
 
-  private async activate(ruby: string) {
+  private async activate(rubyCommand: string) {
     let shellProfilePath;
     // eslint-disable-next-line no-process-env
     const shell = process.env.SHELL?.split("/").pop();
@@ -86,18 +86,18 @@ export class Ruby {
     }
 
     // eslint-disable-next-line no-process-env
-    process.env = await this.analyze(
-      `source ${shellProfilePath} > /dev/null 2>&1 && ${ruby}`,
+    process.env = await this.collectRubyInformation(
+      `source ${shellProfilePath} > /dev/null 2>&1 && ${rubyCommand}`,
       { shell, cwd: this.workingFolder }
     );
   }
 
-  private async analyze(
-    ruby: string,
+  private async collectRubyInformation(
+    rubyCommand: string,
     opts?: ExecOptions
   ): Promise<{ [key: string]: string }> {
     const result = await asyncExec(
-      `${ruby} -rjson -e "puts JSON.dump(env: ENV.to_h, version: RUBY_VERSION, yjit: defined?(RubyVM::YJIT))"`,
+      `${rubyCommand} -rjson -e "puts JSON.dump(env: ENV.to_h, version: RUBY_VERSION, yjit: defined?(RubyVM::YJIT))"`,
       { ...opts, encoding: "utf-8" }
     );
 
