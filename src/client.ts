@@ -147,6 +147,17 @@ export default class Client {
     }
   }
 
+  async sayHello(): Promise<void> {
+    vscode.window.showInformationMessage("Hello from Andy");
+  }
+
+  async showSettingsPage(): Promise<void> {
+    vscode.commands.executeCommand(
+      "workbench.action.openSettings",
+      "@ext:Shopify.ruby-lsp"
+    );
+  }
+
   async restart() {
     await this.stop();
     await this.start();
@@ -156,7 +167,10 @@ export default class Client {
     this.context.subscriptions.push(
       vscode.commands.registerCommand("ruby-lsp.start", () => this.start()),
       vscode.commands.registerCommand("ruby-lsp.restart", () => this.restart()),
-      vscode.commands.registerCommand("ruby-lsp.stop", () => this.stop())
+      vscode.commands.registerCommand("ruby-lsp.stop", () => this.stop()),
+      vscode.commands.registerCommand("ruby-lsp.showSettingsPage", () =>
+        this.showSettingsPage()
+      )
     );
   }
 

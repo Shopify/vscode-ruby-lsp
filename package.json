@@ -19,7 +19,8 @@
   ],
   "activationEvents": [
     "onLanguage:ruby",
-    "workspaceContains:Gemfile.lock"
+    "workspaceContains:Gemfile.lock",
+    "onCommand:ruby-lsp.showSettingsPage"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -35,6 +36,10 @@
       {
         "command": "ruby-lsp.stop",
         "title": "Ruby LSP: Stop"
+      },
+      {
+        "command": "ruby-lsp.sayHello",
+        "title": "Ruby LSP: Say Hello"
       }
     ],
     "configuration": {
@@ -139,6 +144,152 @@
         }
       }
     },
+    "walkthroughs": [
+      {
+        "id": "overview",
+        "title": "Welcome to Ruby LSP - Overview",
+        "description": "Learn about Ruby LSP and how get started",
+        "steps": [
+          {
+            "id": "welcome",
+            "title": "Welcome to Ruby LSP",
+            "description": "This walkthrough will help you get started with Ruby LSP",
+            "media": {
+              "markdown": "media/welcome.md"
+            }
+          },
+          {
+            "id": "lsp",
+            "title": "What does LSP mean?",
+            "media": {
+              "markdown": "media/lsp.md"
+            }
+          },
+          {
+            "id": "installation",
+            "title": "Installation",
+            "media": {
+              "markdown": "media/installation.md"
+            }
+          },
+          {
+            "id": "verify-non-mac",
+            "title": "Verify Installation",
+            "description": "To get started, open a Ruby file. Then bring up the command palette (Ctrl+Shift+P) and choose 'Ruby LSP: Restart'.",
+            "when": "isWindows || isLinux",
+            "completionEvents": [
+              "onCommand:ruby-lsp.restart"
+            ],
+            "media": {
+              "markdown": "media/verify_installation.md"
+            }
+          },
+          {
+            "id": "verify-mac",
+            "title": "Verify Installation",
+            "description": "To get started, open a Ruby file. Then bring up the command palette (Command+Shift+P) and choose 'Ruby LSP: Restart'.",
+            "when": "isMac",
+            "completionEvents": [
+              "onCommand:ruby-lsp.restart"
+            ],
+            "media": {
+              "markdown": "media/verify_installation.md"
+            }
+          }
+        ]
+      },
+      {
+        "id": "features",
+        "title": "Welcome to Ruby LSP - Features",
+        "description": "Learn how the features provided by Ruby LSP",
+        "steps": [
+          {
+            "id": "diagnostics",
+            "title": "Diagnostics (RuboCop linting)",
+            "media": {
+              "markdown": "media/diagnostics.md"
+            }
+          },
+          {
+            "id": "codeactions",
+            "title": "Code Actions (RuboCop Quick Fixes)",
+            "media": {
+              "markdown": "media/code_actions.md"
+            }
+          },
+          {
+            "id": "formatting",
+            "title": "Formatting",
+            "media": {
+              "markdown": "media/formatting.md"
+            }
+          },
+          {
+            "id": "documenthighlight",
+            "title": "Syntax Highlighting",
+            "media": {
+              "markdown": "media/document_highlight.md"
+            }
+          },
+          {
+            "id": "documentlink",
+            "title": "Document Link",
+            "media": {
+              "markdown": "media/document_link.md"
+            }
+          },
+          {
+            "id": "documentsymbol",
+            "title": "Document Symbols (Navigation)",
+            "media": {
+              "markdown": "media/document_symbol.md"
+            }
+          },
+          {
+            "id": "foldingranges",
+            "title": "Code Folding",
+            "media": {
+              "markdown": "media/folding_ranges.md"
+            }
+          },
+          {
+            "id": "hover",
+            "title": "Hover (Rails Documentation)",
+            "media": {
+              "markdown": "media/hover.md"
+            }
+          },
+          {
+            "id": "inlayhints",
+            "title": "Inlay Hints",
+            "media": {
+              "markdown": "media/inlay_hints.md"
+            }
+          },
+          {
+            "id": "ontypeformatting",
+            "title": "Format On Type",
+            "media": {
+              "markdown": "media/on_type_formatting.md"
+            }
+          },
+          {
+            "id": "selectionranges",
+            "title": "Selection Ranges",
+            "media": {
+              "markdown": "media/selection_ranges.md"
+            }
+          },
+          {
+            "id": "semantichighlighting",
+            "title": "Semantic Highlighting",
+            "media": {
+              "markdown": "media/semantic_highlighting.md"
+            }
+          }
+        ]
+      }
+    ],
     "snippets": [
       {
         "language": "ruby",
