@@ -1,5 +1,3 @@
-import { allowedNodeEnvironmentFlags } from "process";
-
 import * as vscode from "vscode";
 
 import Client from "./client";
