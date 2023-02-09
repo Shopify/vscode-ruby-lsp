@@ -1,6 +1,9 @@
 import { TextDecoder } from "util";
+import * as childProcess from "child_process";
+import { relative } from "path";
 
 import * as vscode from "vscode";
+import { stdout } from "process";
 
 export const initTestController = (context: vscode.ExtensionContext) => {
   const controller = vscode.tests.createTestController(
@@ -13,43 +16,11 @@ export const initTestController = (context: vscode.ExtensionContext) => {
   // when the user opens the Test Explorer for the first time.
   controller.resolveHandler = async (test) => {
     if (test) {
-      await parseTestsInFileContents(test);
+      // await parseTestsInFileContents(test);
     } else {
       await discoverAllFilesInWorkspace();
     }
   };
-
-  // When text documents are open, parse tests in them.
-  vscode.workspace.onDidOpenTextDocument(parseTestsInDocument);
-  // We could also listen to document changes to re-parse unsaved changes:
-  vscode.workspace.onDidChangeTextDocument((doc) =>
-    parseTestsInDocument(doc.document)
-  );
-
-  // In this function, we'll get the file TestItem if we've already found it,
-  // otherwise we'll create it with `canResolveChildren = true` to indicate it
-  // can be passed to the `controller.resolveHandler` to gets its children.
-  function getOrCreateFile(uri: vscode.Uri) {
-    const existing = controller.items.get(uri.toString());
-    if (existing) {
-      return existing;
-    }
-
-    const file = controller.createTestItem(
-      uri.toString(),
-      uri.path.split("/").pop()!,
-      uri
-    );
-    file.canResolveChildren = true;
-    controller.items.add(file);
-    return file;
-  }
-
-  function parseTestsInDocument(doc: vscode.TextDocument) {
-    if (doc.uri.scheme === "file" && doc.uri.path.endsWith(".rb")) {
-      parseTestsInFileContents(getOrCreateFile(doc.uri), doc.getText());
-    }
-  }
 
   async function parseTestsInFileContents(
     file: vscode.TestItem,
@@ -84,28 +55,65 @@ export const initTestController = (context: vscode.ExtensionContext) => {
       return [];
     }
 
-    return Promise.all(
-      vscode.workspace.workspaceFolders.map(async (workspaceFolder) => {
-        const pattern = new vscode.RelativePattern(workspaceFolder, "**/*.rb");
-        const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    const repoRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
 
-        // When files are created, make sure there's a corresponding "file" node in the tree
-        watcher.onDidCreate((uri) => getOrCreateFile(uri));
-        // When files change, re-parse them. Note that you could optimize this so
-        // that you only re-parse children that have been resolved in the past.
-        watcher.onDidChange((uri) =>
-          parseTestsInFileContents(getOrCreateFile(uri))
-        );
-        // And, finally, delete TestItems for removed files. This is simple, since
-        // we use the URI as the TestItem's ID.
-        watcher.onDidDelete((uri) => controller.items.delete(uri.toString()));
+    const gemPath = vscode.workspace
+      .getConfiguration("devTestRunner")
+      .get("rubyTestRunnerPath");
+    const fileDiscoveryCmd = "/exe/ruby_test_runner_dirs";
+    const cmd = `${gemPath}${fileDiscoveryCmd} ${repoRoot}`;
 
-        for (const file of await vscode.workspace.findFiles(pattern)) {
-          getOrCreateFile(file);
+    childProcess.exec(
+      cmd,
+      {
+        maxBuffer: 8192 * 8192,
+      },
+      (err, stdout) => {
+        if (err) {
+          // Show an error message.
+          vscode.window.showWarningMessage("Failed to discover Ruby tests.");
+          vscode.window.showErrorMessage(err.message);
+          throw err;
         }
 
-        return watcher;
-      })
+        const testFiles: {
+          [dir: string]: string[];
+        } = JSON.parse(stdout);
+        for (const dirRelPath in testFiles) {
+          const dirUri = vscode.Uri.joinPath(
+            (vscode.workspace.workspaceFolders || [])[0].uri,
+            dirRelPath
+          );
+          let dir = controller.items.get(dirUri.toString());
+
+          if (!dir) {
+            dir = controller.createTestItem(
+              dirUri.toString(),
+              dirRelPath,
+              dirUri
+            );
+          }
+
+          dir.canResolveChildren = true;
+          controller.items.add(dir);
+
+          for (const fileName of testFiles[dirRelPath].flat()) {
+            const fileUri = vscode.Uri.joinPath(dirUri, fileName);
+            let file = controller.items.get(fileUri.toString());
+
+            if (!file) {
+              file = controller.createTestItem(
+                fileUri.toString(),
+                fileName,
+                fileUri
+              );
+            }
+
+            file.canResolveChildren = true;
+            dir.children.add(file);
+          }
+        }
+      }
     );
   }
 
@@ -134,19 +142,16 @@ export const initTestController = (context: vscode.ExtensionContext) => {
         continue;
       }
 
-      if (test.parent) {
+      if (test.parent && test.uri) {
         // Otherwise, just run the test case. Note that we don't need to manually
         // set the state of parent tests; they'll be set automatically.
-        const start = Date.now();
-        try {
-          run.passed(test, Date.now() - start);
-        } catch (err: any) {
-          run.failed(
-            test,
-            new vscode.TestMessage(err.message),
-            Date.now() - start
-          );
-        }
+        runDevTest(
+          test.uri,
+          test.id,
+          (vscode.workspace.workspaceFolders || [])[0].uri.fsPath,
+          run,
+          test
+        );
       }
 
       test.children.forEach((test) => queue.push(test));
@@ -154,6 +159,63 @@ export const initTestController = (context: vscode.ExtensionContext) => {
 
     // Make sure to end the run after all tests have been executed:
     run.end();
+  }
+
+  function runDevTest(
+    uri: vscode.Uri,
+    testName: string,
+    rootPath: string,
+    testRun: vscode.TestRun,
+    test: vscode.TestItem
+  ) {
+    const testPathRelative = relative(rootPath, uri.fsPath);
+
+    const gemPath = vscode.workspace
+      .getConfiguration("devTestRunner")
+      .get("rubyTestRunnerPath");
+    const testRunnerCmd = "/exe/ruby_test_runner_cmd";
+    const preCmd = `${gemPath}${testRunnerCmd} ${rootPath} ${testPathRelative}`;
+
+    const cmd = childProcess.execSync(preCmd).toString().trim();
+
+    const execArgs: childProcess.ExecOptions = {
+      cwd: rootPath,
+      maxBuffer: 8192 * 8192,
+    };
+
+    const start = Date.now();
+
+    try {
+      const testOutput = childProcess.execSync(cmd, execArgs).toString().trim();
+
+      const summaryLine = testOutput.substring(testOutput.lastIndexOf("\n"));
+
+      const errCountRegex = /(\d+) errors/;
+      const errCount = Number((summaryLine.match(errCountRegex) || [])[1]);
+
+      const failureCountRegex = /(\d+) failures/;
+      const failureCount = Number((summaryLine.match(failureCountRegex) || [])[1]);
+
+      if (errCount || failureCount) {
+        testRun.failed(
+          test,
+          new vscode.TestMessage("Test failed"),
+          Date.now() - start
+        );
+        vscode.window.showErrorMessage(testOutput);
+      } else {
+        testRun.passed(test, Date.now() - start);
+      }
+    } catch (err: any) {
+      testRun.failed(
+        test,
+        new vscode.TestMessage("Test failed"),
+        Date.now() - start
+      );
+      // vscode.window.showWarningMessage("Test failed to run.");
+      // vscode.window.showErrorMessage(err.stdout);
+      // throw err;
+    }
   }
 
   controller.createRunProfile(
