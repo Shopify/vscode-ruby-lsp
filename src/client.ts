@@ -161,8 +161,21 @@ export default class Client {
     this.context.subscriptions.push(
       vscode.commands.registerCommand("ruby-lsp.start", () => this.start()),
       vscode.commands.registerCommand("ruby-lsp.restart", () => this.restart()),
-      vscode.commands.registerCommand("ruby-lsp.stop", () => this.stop())
+      vscode.commands.registerCommand("ruby-lsp.stop", () => this.stop()),
+      vscode.commands.registerCommand(
+        "rubyLsp.runTest",
+        this.runTest.bind(this)
+      )
     );
+  }
+
+  private runTest(path: string, name?: string) {
+    const optionalName = name || "";
+    const testCmd = `dev test ${path} ${optionalName}`;
+    const terminal =
+      vscode.window.activeTerminal || vscode.window.createTerminal();
+    terminal.show();
+    terminal.sendText(testCmd, true);
   }
 
   private registerAutoRestarts() {
