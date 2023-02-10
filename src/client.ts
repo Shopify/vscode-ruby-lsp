@@ -169,13 +169,11 @@ export default class Client {
     );
   }
 
-  private runTest(path: string, name?: string) {
-    const optionalName = name || "";
-    const testCmd = `dev test ${path} ${optionalName}`;
+  private runTest(command: string) {
     const terminal =
       vscode.window.activeTerminal || vscode.window.createTerminal();
     terminal.show();
-    terminal.sendText(testCmd, true);
+    terminal.sendText(command, true);
   }
 
   private registerAutoRestarts() {
