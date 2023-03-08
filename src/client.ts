@@ -26,13 +26,13 @@ export default class Client {
   private telemetry: Telemetry;
   private ruby: Ruby;
   private statusItem: StatusItem;
+  private outputChannel = vscode.window.createOutputChannel(LSP_NAME);
 
   constructor(
     context: vscode.ExtensionContext,
     telemetry: Telemetry,
     ruby: Ruby
   ) {
-    const outputChannel = vscode.window.createOutputChannel(LSP_NAME);
     this.workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
     this.telemetry = telemetry;
     this.ruby = ruby;
@@ -56,7 +56,7 @@ export default class Client {
     this.clientOptions = {
       documentSelector: [{ scheme: "file", language: "ruby" }],
       diagnosticCollectionName: LSP_NAME,
-      outputChannel,
+      outputChannel: this.outputChannel,
       revealOutputChannelOn: RevealOutputChannelOn.Never,
       initializationOptions: {
         enabledFeatures: this.listOfEnabledFeatures(),
@@ -126,6 +126,12 @@ export default class Client {
   }
 
   async start() {
+    this.client = new LanguageClient(
+      LSP_NAME,
+      this.serverOptions,
+      this.clientOptions
+    );
+
     if (
       (await this.statusItem.installGems()) ||
       (await this.statusItem.addMissingGem())
@@ -135,13 +141,13 @@ export default class Client {
 
     await this.statusItem.updateStatus(ServerCommand.Start);
 
-    this.client = new LanguageClient(
-      LSP_NAME,
-      this.serverOptions,
-      this.clientOptions
+    this.client.onTelemetry((event) =>
+      this.telemetry.sendEvent({
+        ...event,
+        rubyVersion: this.ruby.rubyVersion,
+        yjitEnabled: this.ruby.yjitEnabled,
+      })
     );
-
-    this.client.onTelemetry(this.telemetry.sendEvent.bind(this.telemetry));
     await this.client.start();
   }
 
@@ -153,15 +159,24 @@ export default class Client {
   }
 
   async restart() {
-    await this.stop();
-    await this.start();
+    try {
+      await this.stop();
+      await this.start();
+    } catch (error: any) {
+      this.outputChannel.appendLine(
+        `Error restarting the server: ${error.message}`
+      );
+    }
   }
 
   private registerCommands() {
     this.context.subscriptions.push(
-      vscode.commands.registerCommand("ruby-lsp.start", () => this.start()),
-      vscode.commands.registerCommand("ruby-lsp.restart", () => this.restart()),
-      vscode.commands.registerCommand("ruby-lsp.stop", () => this.stop())
+      vscode.commands.registerCommand("ruby-lsp.start", this.start.bind(this)),
+      vscode.commands.registerCommand(
+        "ruby-lsp.restart",
+        this.restart.bind(this)
+      ),
+      vscode.commands.registerCommand("ruby-lsp.stop", this.stop.bind(this))
     );
   }
 
@@ -192,29 +207,34 @@ export default class Client {
     );
     this.context.subscriptions.push(watcher);
 
-    watcher.onDidChange(async () => {
-      await this.restart();
-    });
-    watcher.onDidCreate(async () => {
-      await this.restart();
-    });
-    watcher.onDidDelete(async () => {
-      await this.restart();
-    });
+    watcher.onDidChange(this.restart.bind(this));
+    watcher.onDidCreate(this.restart.bind(this));
+    watcher.onDidDelete(this.restart.bind(this));
   }
 
   private listOfEnabledFeatures(): string[] {
-    const features: EnabledFeatures = vscode.workspace
-      .getConfiguration("rubyLsp")
-      .get("enabledFeatures")!;
+    const configuration = vscode.workspace.getConfiguration("rubyLsp");
+    const features: EnabledFeatures = configuration.get("enabledFeatures")!;
+    const allFeatures = Object.keys(features);
 
-    return Object.keys(features).filter((key) => features[key]);
+    // If enableExperimentalFeatures is true, all features are enabled
+    if (configuration.get("enableExperimentalFeatures")) {
+      return allFeatures;
+    }
+
+    return allFeatures.filter((key) => features[key]);
   }
 
   private getEnv() {
     // eslint-disable-next-line no-process-env
     const env = process.env;
     const useYjit = vscode.workspace.getConfiguration("rubyLsp").get("yjit");
+
+    Object.keys(env).forEach((key) => {
+      if (key.startsWith("RUBY_GC")) {
+        delete env[key];
+      }
+    });
 
     if (!this.ruby.rubyVersion) {
       return env;

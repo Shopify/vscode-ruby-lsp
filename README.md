@@ -10,7 +10,8 @@ Companion VS Code extension for the [Ruby LSP gem](https://github.com/Shopify/ru
 
 ## Usage
 
-Search for `ruby-lsp` in the extensions tab and click install.
+Search for `ruby-lsp` in the extensions tab and click install. Please check the configuration section for further
+instructions.
 
 ### Configuration
 
@@ -31,17 +32,21 @@ following configuration (definition of all available values can be found in the
 }
 ```
 
-In order to boot the server properly, the Ruby version manager must be configured, which defaults to using shadowenv.
+To boot the server properly, the Ruby version manager must be configured, which defaults to using shadowenv.
 Check the [package.json](https://github.com/Shopify/vscode-ruby-lsp/blob/main/package.json) for currently supported
 managers.
 
-To make sure that the Ruby LSP can find the version manager scripts, make sure that they are loaded in the shell's
-configuration script (e.g.: ~/.bashrc, ~/.zshrc) and that the SHELL environment variable is set and pointing to the
-default shell.
+The Ruby LSP uses the Ruby version manager to reactivate the required Ruby version and to select the correct gem and
+Bundler paths, which is necessary when switching between projects using different Ruby versions. Use the extension's
+`rubyLsp.rubyVersionManager` setting to control which version manager is used.
 
 ```jsonc
 "rubyLsp.rubyVersionManager": "chruby" // The handle for the version manager (e.g.: chruby, shadowenv)
 ```
+
+To make sure that the Ruby LSP can find the version manager scripts, make sure that they are loaded in the shell's
+configuration script (e.g.: ~/.bashrc, ~/.zshrc) and that the SHELL environment variable is set and pointing to the
+default shell.
 
 ### Commands
 
@@ -104,6 +109,28 @@ code of conduct.
 ### Debugging
 
 Interactive debugging works for both running the extension or tests. In the debug panel, select whether to run the extension in development mode or run tests, set up some breakpoints and start with F5.
+
+### Tracing LSP requests and responses
+
+LSP server tracing can be controlled through the `ruby lsp.trace.server` config key in the `.vscode/settings.json` config file.
+
+Possible values are:
+
+- `off`: no tracing
+- `messages`: display requests and responses notifications
+- `verbose`: display each request and response as JSON
+
+### Debugging using VS Code
+
+The `launch.json` contains a 'Minitest - current file' configuration for the debugger.
+
+1. Add a breakpoint using the VS Code UI.
+1. Open the relevant test file.
+1. Open the **Run and Debug** panel on the sidebar.
+1. Ensure `Minitest - current file` is selected in the top dropdown.
+1. Press `F5` OR click the green triangle next to the top dropdown. VS Code will then run the test file with debugger activated.
+1. When the breakpoint is triggered, the process will pause and VS Code will connect to the debugger and activate the debugger UI.
+1. Open the Debug Console view to use the debugger's REPL.
 
 ## License
 
