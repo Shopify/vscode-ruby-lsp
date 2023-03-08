@@ -37,6 +37,16 @@
         "title": "Ruby LSP: Stop"
       }
     ],
+    "configurationDefaults": {
+      "[ruby]": {
+        "files.exclude": {
+          "**/.ruby-lsp": true
+        },
+        "search.exclude": {
+          "**/.ruby-lsp": true
+        }
+      }
+    },
     "configuration": {
       "title": "Ruby LSP",
       "properties": {
