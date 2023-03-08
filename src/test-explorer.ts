@@ -1,9 +1,9 @@
 import { TextDecoder } from "util";
 import * as childProcess from "child_process";
 import { relative } from "path";
+import { stdout } from "process";
 
 import * as vscode from "vscode";
-import { stdout } from "process";
 
 export const initTestController = (context: vscode.ExtensionContext) => {
   const controller = vscode.tests.createTestController(
@@ -194,7 +194,9 @@ export const initTestController = (context: vscode.ExtensionContext) => {
       const errCount = Number((summaryLine.match(errCountRegex) || [])[1]);
 
       const failureCountRegex = /(\d+) failures/;
-      const failureCount = Number((summaryLine.match(failureCountRegex) || [])[1]);
+      const failureCount = Number(
+        (summaryLine.match(failureCountRegex) || [])[1]
+      );
 
       if (errCount || failureCount) {
         testRun.failed(
