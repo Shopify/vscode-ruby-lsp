@@ -19,7 +19,8 @@
   ],
   "activationEvents": [
     "onLanguage:ruby",
-    "workspaceContains:Gemfile.lock"
+    "workspaceContains:Gemfile.lock",
+    "onView:bundler"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -39,6 +40,11 @@
       {
         "command": "rubyLsp.update",
         "title": "Ruby LSP: Update language server gem"
+      },
+      {
+        "command": "bundler.remove",
+        "title": "Remove Gem",
+        "icon": "$(trash)"
       }
     ],
     "configuration": {
@@ -224,7 +230,24 @@
         ],
         "configuration": "./languages/erb.json"
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "bundler",
+          "name": "Bundler"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "bundler.remove",
+          "when": "view == bundler && viewItem == gem",
+          "group": "inline"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "yarn run esbuild-base --minify",
