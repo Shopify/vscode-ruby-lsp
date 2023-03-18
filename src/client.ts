@@ -15,6 +15,7 @@ import {
 import { Telemetry } from "./telemetry";
 import { Ruby } from "./ruby";
 import { StatusItems, Command, ServerState, ClientInterface } from "./status";
+import { Bundler } from "./bundler";
 
 const LSP_NAME = "Ruby LSP";
 const asyncExec = promisify(exec);
@@ -30,6 +31,7 @@ export default class Client implements ClientInterface {
   private telemetry: Telemetry;
   private statusItems: StatusItems;
   private outputChannel = vscode.window.createOutputChannel(LSP_NAME);
+  private bundler: Bundler | undefined;
   #context: vscode.ExtensionContext;
   #ruby: Ruby;
   #state: ServerState = ServerState.Starting;
@@ -69,6 +71,8 @@ export default class Client implements ClientInterface {
 
       return;
     }
+
+    this.updateBundler();
 
     const executableOptions = {
       cwd: this.workingFolder,
@@ -237,6 +241,14 @@ export default class Client implements ClientInterface {
         this.updateServer.bind(this)
       )
     );
+  }
+
+  private updateBundler() {
+    if (this.bundler) {
+      this.bundler.refresh();
+    } else {
+      this.bundler = new Bundler(this.context, this.ruby);
+    }
   }
 
   private async setupCustomGemfile() {
