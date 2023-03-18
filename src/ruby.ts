@@ -86,6 +86,18 @@ export class Ruby {
     }
   }
 
+  async run(command: string, options?: { withOriginalGemfile: boolean }) {
+    if (this._error) {
+      return;
+    }
+
+    const env = { ...this._env };
+    if (options?.withOriginalGemfile) {
+      env.BUNDLE_GEMFILE = path.join(this.workingFolder, "Gemfile");
+    }
+    return asyncExec(command, { env });
+  }
+
   private async activateShadowenv() {
     const extension = vscode.extensions.getExtension(
       "shopify.vscode-shadowenv"
