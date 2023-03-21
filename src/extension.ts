@@ -5,25 +5,39 @@ import { Telemetry } from "./telemetry";
 import { Ruby } from "./ruby";
 import { StatusItems } from "./status";
 
-let client: Client;
-let statusItems: StatusItems;
+class Extension {
+  private telemetry: Telemetry;
+  private ruby: Ruby;
+  private client: Client;
+  private statusItems: StatusItems;
+
+  constructor(context: vscode.ExtensionContext) {
+    this.telemetry = new Telemetry(context);
+    this.ruby = new Ruby();
+    this.client = new Client(context, this.telemetry, this.ruby);
+    this.statusItems = new StatusItems(this.client);
+  }
+
+  async activate() {
+    await this.ruby.activateRuby();
+    await this.client.start();
+  }
+
+  async deactivate() {
+    await this.client.stop();
+    this.statusItems.dispose();
+  }
+}
+
+let extension: Extension | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const ruby = new Ruby();
-  await ruby.activateRuby();
-
-  const telemetry = new Telemetry(context);
-  client = new Client(context, telemetry, ruby);
-  statusItems = new StatusItems(client);
-
-  await client.start();
+  extension = new Extension(context);
+  await extension.activate();
 }
 
 export async function deactivate(): Promise<void> {
-  if (client) {
-    return client.stop();
-  }
-  if (statusItems) {
-    statusItems.dispose();
+  if (extension) {
+    await extension.deactivate();
   }
 }
