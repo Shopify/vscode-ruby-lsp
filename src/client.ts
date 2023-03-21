@@ -15,7 +15,6 @@ import {
 import { Telemetry } from "./telemetry";
 import { Ruby } from "./ruby";
 import { Command, ServerState } from "./enums";
-import { StatusItems, ClientInterface } from "./status";
 
 const LSP_NAME = "Ruby LSP";
 const asyncExec = promisify(exec);
@@ -25,16 +24,15 @@ interface EnabledFeatures {
   [key: string]: boolean;
 }
 
-export default class Client implements ClientInterface {
+export default class Client {
   private client: LanguageClient | undefined;
   private workingFolder: string;
   private telemetry: Telemetry;
-  private statusItems: StatusItems;
   private outputChannel = vscode.window.createOutputChannel(LSP_NAME);
   #context: vscode.ExtensionContext;
   #ruby: Ruby;
   #state: ServerState = ServerState.Starting;
-  #onStateChangeEmitter = new vscode.EventEmitter<ClientInterface>();
+  #onStateChangeEmitter = new vscode.EventEmitter<Client>();
 
   constructor(
     context: vscode.ExtensionContext,
@@ -45,7 +43,6 @@ export default class Client implements ClientInterface {
     this.telemetry = telemetry;
     this.#context = context;
     this.#ruby = ruby;
-    this.statusItems = new StatusItems(this);
     this.registerCommands();
     this.registerAutoRestarts();
   }
@@ -204,7 +201,7 @@ export default class Client implements ClientInterface {
     }
   }
 
-  get onStateChange(): vscode.Event<ClientInterface> {
+  get onStateChange() {
     return this.#onStateChangeEmitter.event;
   }
 

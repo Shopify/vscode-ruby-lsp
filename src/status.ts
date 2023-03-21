@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { Disposable } from "vscode-languageclient";
 
+import Client from "./client";
 import { Command, ServerState, VersionManager } from "./enums";
-import { Ruby } from "./ruby";
 
 const STOPPED_SERVER_OPTIONS: vscode.QuickPickItem[] = [
   { label: "Ruby LSP: Start", description: Command.Start },
@@ -13,13 +13,6 @@ const STARTED_SERVER_OPTIONS: vscode.QuickPickItem[] = [
   { label: "Ruby LSP: Stop", description: Command.Stop },
   { label: "Ruby LSP: Restart", description: Command.Restart },
 ];
-
-export interface ClientInterface {
-  context: vscode.ExtensionContext;
-  ruby: Ruby;
-  state: ServerState;
-  onStateChange: vscode.Event<ClientInterface>;
-}
 
 export abstract class StatusItem {
   public item: vscode.LanguageStatusItem;
@@ -35,7 +28,7 @@ export abstract class StatusItem {
     }
   }
 
-  abstract refresh(client: ClientInterface): void;
+  abstract refresh(client: Client): void;
 
   dispose(): void {
     this.item.dispose();
@@ -58,7 +51,7 @@ export class RubyVersionStatus extends StatusItem {
     };
   }
 
-  refresh(client: ClientInterface): void {
+  refresh(client: Client): void {
     if (client.ruby.error) {
       this.item.text = "Failed to activate Ruby";
       this.item.severity = vscode.LanguageStatusSeverity.Error;
@@ -99,7 +92,7 @@ export class ServerStatus extends StatusItem {
     };
   }
 
-  refresh(client: ClientInterface): void {
+  refresh(client: Client): void {
     switch (client.state) {
       case ServerState.Running:
       case ServerState.Starting: {
@@ -195,7 +188,7 @@ export class YjitStatus extends StatusItem {
     this.item.name = "YJIT";
   }
 
-  refresh(client: ClientInterface): void {
+  refresh(client: Client): void {
     const useYjit: boolean | undefined = vscode.workspace
       .getConfiguration("rubyLsp")
       .get("yjit");
@@ -309,7 +302,7 @@ export class FeaturesStatus extends StatusItem {
 export class StatusItems {
   private items: StatusItem[] = [];
 
-  constructor(client: ClientInterface) {
+  constructor(client: Client) {
     this.items = [
       new RubyVersionStatus(client.context),
       new ServerStatus(client.context),
@@ -321,7 +314,11 @@ export class StatusItems {
     client.onStateChange(this.refresh, this);
   }
 
-  public refresh(client: ClientInterface): void {
+  public refresh(client: Client): void {
     this.items.forEach((item) => item.refresh(client));
+  }
+
+  public dispose() {
+    this.items.forEach((item) => item.dispose());
   }
 }
