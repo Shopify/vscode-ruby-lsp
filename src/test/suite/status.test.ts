@@ -8,39 +8,33 @@ import {
   RubyVersionStatus,
   ServerStatus,
   ExperimentalFeaturesStatus,
-  Command,
   YjitStatus,
   StatusItem,
-  ServerState,
-  ClientInterface,
   FeaturesStatus,
 } from "../../status";
+import Client from "../../client";
+import { Command, ServerState } from "../../enums";
 
 suite("StatusItems", () => {
   let ruby: Ruby;
-  let context: vscode.ExtensionContext;
   let status: StatusItem;
-  let client: ClientInterface;
+  let client: Client;
 
-  beforeEach(() => {
-    context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
-  });
+  const clientWithState = (state: ServerState) => {
+    return {
+      ruby,
+      state,
+    } as Client;
+  };
 
   afterEach(() => {
-    context.subscriptions.forEach((subscription) => {
-      subscription.dispose();
-    });
     status.dispose();
   });
 
   suite("RubyVersionStatus", () => {
     beforeEach(() => {
       ruby = { rubyVersion: "3.2.0" } as Ruby;
-      client = {
-        context,
-        ruby,
-        state: ServerState.Running,
-      };
+      client = clientWithState(ServerState.Running);
       status = new RubyVersionStatus(client);
     });
 
@@ -52,14 +46,13 @@ suite("StatusItems", () => {
         status.item.command?.command,
         Command.SelectVersionManager
       );
-      assert.strictEqual(context.subscriptions.length, 1);
     });
 
     test("Refresh updates version string", async () => {
       assert.strictEqual(status.item.text, "Using Ruby 3.2.0");
 
       client.ruby.rubyVersion = "3.2.1";
-      status.refresh();
+      status.refresh(client);
       assert.strictEqual(status.item.text, "Using Ruby 3.2.1");
     });
   });
@@ -67,8 +60,8 @@ suite("StatusItems", () => {
   suite("ServerStatus", () => {
     beforeEach(() => {
       ruby = {} as Ruby;
-      client = { context, ruby, state: ServerState.Running };
-      status = new ServerStatus(client);
+      client = clientWithState(ServerState.Running);
+      status = new ServerStatus();
     });
 
     test("Status is initialized with the right values", async () => {
@@ -80,12 +73,11 @@ suite("StatusItems", () => {
       );
       assert.strictEqual(status.item.command?.title, "Configure");
       assert.strictEqual(status.item.command?.command, Command.ServerOptions);
-      assert.strictEqual(context.subscriptions.length, 1);
     });
 
     test("Refresh when server is starting", async () => {
-      client.state = ServerState.Starting;
-      status.refresh();
+      client = clientWithState(ServerState.Starting);
+      status.refresh(client);
       assert.strictEqual(status.item.text, "Ruby LSP: Starting");
       assert.strictEqual(
         status.item.severity,
@@ -94,8 +86,8 @@ suite("StatusItems", () => {
     });
 
     test("Refresh when server is stopping", async () => {
-      client.state = ServerState.Stopped;
-      status.refresh();
+      client = clientWithState(ServerState.Stopped);
+      status.refresh(client);
       assert.strictEqual(status.item.text, "Ruby LSP: Stopped");
       assert.strictEqual(
         status.item.severity,
@@ -104,8 +96,8 @@ suite("StatusItems", () => {
     });
 
     test("Refresh when server has errored", async () => {
-      client.state = ServerState.Error;
-      status.refresh();
+      client = clientWithState(ServerState.Error);
+      status.refresh(client);
       assert.strictEqual(status.item.text, "Ruby LSP: Error");
       assert.strictEqual(
         status.item.severity,
@@ -117,12 +109,8 @@ suite("StatusItems", () => {
   suite("ExperimentalFeaturesStatus", () => {
     beforeEach(() => {
       ruby = {} as Ruby;
-      client = {
-        context,
-        ruby,
-        state: ServerState.Running,
-      };
-      status = new ExperimentalFeaturesStatus(client);
+      client = clientWithState(ServerState.Running);
+      status = new ExperimentalFeaturesStatus();
     });
 
     test("Status is initialized with the right values", async () => {
@@ -133,14 +121,13 @@ suite("StatusItems", () => {
         status.item.command?.command,
         Command.ToggleExperimentalFeatures
       );
-      assert.strictEqual(context.subscriptions.length, 1);
     });
   });
 
   suite("YjitStatus when Ruby supports it", () => {
     beforeEach(() => {
       ruby = { supportsYjit: true } as Ruby;
-      client = { context, ruby, state: ServerState.Running };
+      client = clientWithState(ServerState.Running);
       status = new YjitStatus(client);
     });
 
@@ -149,14 +136,13 @@ suite("StatusItems", () => {
       assert.strictEqual(status.item.name, "YJIT");
       assert.strictEqual(status.item.command?.title, "Disable");
       assert.strictEqual(status.item.command?.command, Command.ToggleYjit);
-      assert.strictEqual(context.subscriptions.length, 1);
     });
 
     test("Refresh updates whether it's disabled or enabled", async () => {
       assert.strictEqual(status.item.text, "YJIT enabled");
 
       client.ruby.supportsYjit = false;
-      status.refresh();
+      status.refresh(client);
       assert.strictEqual(status.item.text, "YJIT disabled");
     });
   });
@@ -164,7 +150,7 @@ suite("StatusItems", () => {
   suite("YjitStatus when Ruby does not support it", () => {
     beforeEach(() => {
       ruby = { supportsYjit: false } as Ruby;
-      client = { context, ruby, state: ServerState.Running };
+      client = clientWithState(ServerState.Running);
       status = new YjitStatus(client);
     });
 
@@ -175,7 +161,7 @@ suite("StatusItems", () => {
       const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
       lspConfig.update("yjit", true, true, true);
       client.ruby.supportsYjit = false;
-      status.refresh();
+      status.refresh(client);
 
       assert.strictEqual(status.item.text, "YJIT disabled");
       assert.strictEqual(status.item.command, undefined);
@@ -190,11 +176,8 @@ suite("StatusItems", () => {
 
     beforeEach(() => {
       ruby = {} as Ruby;
-      status = new FeaturesStatus({
-        context,
-        ruby,
-        state: ServerState.Running,
-      });
+      client = clientWithState(ServerState.Running);
+      status = new FeaturesStatus();
     });
 
     afterEach(() => {
@@ -209,7 +192,6 @@ suite("StatusItems", () => {
       assert.strictEqual(status.item.name, "Ruby LSP Features");
       assert.strictEqual(status.item.command?.title, "Manage");
       assert.strictEqual(status.item.command?.command, Command.ToggleFeatures);
-      assert.strictEqual(context.subscriptions.length, 1);
     });
 
     test("Refresh updates number of features", () => {
@@ -228,7 +210,7 @@ suite("StatusItems", () => {
             assert.strictEqual(currentConfig[key], expected);
           });
 
-          status.refresh();
+          status.refresh(client);
           assert.strictEqual(
             status.item.text,
             `${numberOfFeatures - 1}/${numberOfFeatures} features enabled`
