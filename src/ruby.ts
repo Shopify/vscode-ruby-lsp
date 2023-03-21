@@ -5,17 +5,9 @@ import fs from "fs";
 
 import * as vscode from "vscode";
 
-const asyncExec = promisify(exec);
+import { VersionManager } from "./enums";
 
-export enum VersionManager {
-  Asdf = "asdf",
-  Auto = "auto",
-  Chruby = "chruby",
-  Rbenv = "rbenv",
-  Rvm = "rvm",
-  Shadowenv = "shadowenv",
-  None = "none",
-}
+const asyncExec = promisify(exec);
 
 export class Ruby {
   public rubyVersion?: string;

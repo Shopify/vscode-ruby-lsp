@@ -14,7 +14,8 @@ import {
 
 import { Telemetry } from "./telemetry";
 import { Ruby } from "./ruby";
-import { StatusItems, Command, ServerState, ClientInterface } from "./status";
+import { Command, ServerState } from "./enums";
+import { StatusItems, ClientInterface } from "./status";
 
 const LSP_NAME = "Ruby LSP";
 const asyncExec = promisify(exec);

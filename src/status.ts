@@ -1,26 +1,7 @@
 import * as vscode from "vscode";
 
-import { Ruby, VersionManager } from "./ruby";
-
-export enum ServerState {
-  Starting = "Starting",
-  Running = "Running",
-  Stopped = "Stopped",
-  Error = "Error",
-}
-
-// Lists every Command in the Ruby LSP
-export enum Command {
-  Start = "rubyLsp.start",
-  Stop = "rubyLsp.stop",
-  Restart = "rubyLsp.restart",
-  Update = "rubyLsp.update",
-  ToggleExperimentalFeatures = "rubyLsp.toggleExperimentalFeatures",
-  ServerOptions = "rubyLsp.serverOptions",
-  ToggleYjit = "rubyLsp.toggleYjit",
-  SelectVersionManager = "rubyLsp.selectRubyVersionManager",
-  ToggleFeatures = "rubyLsp.toggleFeatures",
-}
+import { Command, ServerState, VersionManager } from "./enums";
+import { Ruby } from "./ruby";
 
 const STOPPED_SERVER_OPTIONS = [
   { label: "Ruby LSP: Start", description: Command.Start },
