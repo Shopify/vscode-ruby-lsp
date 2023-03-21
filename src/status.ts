@@ -1,14 +1,15 @@
 import * as vscode from "vscode";
+import { Disposable } from "vscode-languageclient";
 
 import { Command, ServerState, VersionManager } from "./enums";
 import { Ruby } from "./ruby";
 
-const STOPPED_SERVER_OPTIONS = [
+const STOPPED_SERVER_OPTIONS: vscode.QuickPickItem[] = [
   { label: "Ruby LSP: Start", description: Command.Start },
   { label: "Ruby LSP: Restart", description: Command.Restart },
 ];
 
-const STARTED_SERVER_OPTIONS = [
+const STARTED_SERVER_OPTIONS: vscode.QuickPickItem[] = [
   { label: "Ruby LSP: Stop", description: Command.Stop },
   { label: "Ruby LSP: Restart", description: Command.Restart },
 ];
@@ -21,7 +22,7 @@ export interface ClientInterface {
 
 export abstract class StatusItem {
   public item: vscode.LanguageStatusItem;
-  protected context: vscode.ExtensionContext;
+  protected command?: Disposable;
   protected client: ClientInterface;
 
   constructor(id: string, client: ClientInterface) {
@@ -29,13 +30,13 @@ export abstract class StatusItem {
       scheme: "file",
       language: "ruby",
     });
-    this.context = client.context;
     this.client = client;
-    this.registerCommand();
+    if (this.command) {
+      this.client.context.subscriptions.push(this.command);
+    }
   }
 
   abstract refresh(): void;
-  abstract registerCommand(): void;
 
   dispose(): void {
     this.item.dispose();
@@ -43,6 +44,12 @@ export abstract class StatusItem {
 }
 
 export class RubyVersionStatus extends StatusItem {
+  command = vscode.commands.registerCommand(
+    Command.SelectVersionManager,
+    this.selectVersionManager,
+    this
+  );
+
   constructor(client: ClientInterface) {
     super("rubyVersion", client);
     this.item.name = "Ruby LSP Status";
@@ -50,14 +57,6 @@ export class RubyVersionStatus extends StatusItem {
       title: "Change version manager",
       command: Command.SelectVersionManager,
     };
-
-    if (client.ruby.error) {
-      this.item.text = "Failed to activate Ruby";
-      this.item.severity = vscode.LanguageStatusSeverity.Error;
-    } else {
-      this.item.text = `Using Ruby ${client.ruby.rubyVersion}`;
-      this.item.severity = vscode.LanguageStatusSeverity.Information;
-    }
   }
 
   refresh(): void {
@@ -70,26 +69,25 @@ export class RubyVersionStatus extends StatusItem {
     }
   }
 
-  registerCommand(): void {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        Command.SelectVersionManager,
-        async () => {
-          const options = Object.values(VersionManager);
-          const manager = await vscode.window.showQuickPick(options);
+  private async selectVersionManager() {
+    const options = Object.values(VersionManager);
+    const manager = await vscode.window.showQuickPick(options);
 
-          if (manager !== undefined) {
-            vscode.workspace
-              .getConfiguration("rubyLsp")
-              .update("rubyVersionManager", manager, true, true);
-          }
-        }
-      )
-    );
+    if (manager !== undefined) {
+      vscode.workspace
+        .getConfiguration("rubyLsp")
+        .update("rubyVersionManager", manager, true, true);
+    }
   }
 }
 
 export class ServerStatus extends StatusItem {
+  command = vscode.commands.registerCommand(
+    Command.ServerOptions,
+    this.serverOptions,
+    this
+  );
+
   constructor(client: ClientInterface) {
     super("server", client);
     this.item.name = "Ruby LSP Status";
@@ -126,24 +124,24 @@ export class ServerStatus extends StatusItem {
     }
   }
 
-  registerCommand(): void {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        Command.ServerOptions,
-        async (options: [{ label: string; description: string }]) => {
-          const result = await vscode.window.showQuickPick(options, {
-            placeHolder: "Select server action",
-          });
+  private async serverOptions(options: vscode.QuickPickItem[]) {
+    const result = await vscode.window.showQuickPick(options, {
+      placeHolder: "Select server action",
+    });
 
-          if (result !== undefined)
-            await vscode.commands.executeCommand(result.description);
-        }
-      )
-    );
+    if (result !== undefined) {
+      await vscode.commands.executeCommand(result.description!);
+    }
   }
 }
 
 export class ExperimentalFeaturesStatus extends StatusItem {
+  command = vscode.commands.registerCommand(
+    Command.ToggleExperimentalFeatures,
+    this.toggleExperimentalFeatures,
+    this
+  );
+
   constructor(client: ClientInterface) {
     super("experimentalFeatures", client);
     const experimentalFeaturesEnabled =
@@ -164,40 +162,38 @@ export class ExperimentalFeaturesStatus extends StatusItem {
 
   refresh(): void {}
 
-  registerCommand(): void {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        Command.ToggleExperimentalFeatures,
-        async () => {
-          const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
-          const experimentalFeaturesEnabled = lspConfig.get(
-            "enableExperimentalFeatures"
-          );
-          await lspConfig.update(
-            "enableExperimentalFeatures",
-            !experimentalFeaturesEnabled,
-            true,
-            true
-          );
-          const message = experimentalFeaturesEnabled
-            ? "Experimental features disabled"
-            : "Experimental features enabled";
-          this.item.text = message;
-          this.item.command!.title = experimentalFeaturesEnabled
-            ? "Enable"
-            : "Disable";
-        }
-      )
+  private async toggleExperimentalFeatures() {
+    const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
+    const experimentalFeaturesEnabled = lspConfig.get(
+      "enableExperimentalFeatures"
     );
+    await lspConfig.update(
+      "enableExperimentalFeatures",
+      !experimentalFeaturesEnabled,
+      true,
+      true
+    );
+    const message = experimentalFeaturesEnabled
+      ? "Experimental features disabled"
+      : "Experimental features enabled";
+    this.item.text = message;
+    this.item.command!.title = experimentalFeaturesEnabled
+      ? "Enable"
+      : "Disable";
   }
 }
 
 export class YjitStatus extends StatusItem {
+  command = vscode.commands.registerCommand(
+    Command.ToggleYjit,
+    this.toggleYjit,
+    this
+  );
+
   constructor(client: ClientInterface) {
     super("yjit", client);
 
     this.item.name = "YJIT";
-    this.refresh();
   }
 
   refresh(): void {
@@ -224,20 +220,22 @@ export class YjitStatus extends StatusItem {
     }
   }
 
-  registerCommand(): void {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(Command.ToggleYjit, () => {
-        const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
-        const yjitEnabled = lspConfig.get("yjit");
-        lspConfig.update("yjit", !yjitEnabled, true, true);
-        this.item.text = yjitEnabled ? "YJIT disabled" : "YJIT enabled";
-        this.item.command!.title = yjitEnabled ? "Enable" : "Disable";
-      })
-    );
+  private async toggleYjit() {
+    const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
+    const yjitEnabled = lspConfig.get("yjit");
+    lspConfig.update("yjit", !yjitEnabled, true, true);
+    this.item.text = yjitEnabled ? "YJIT disabled" : "YJIT enabled";
+    this.item.command!.title = yjitEnabled ? "Enable" : "Disable";
   }
 }
 
 export class FeaturesStatus extends StatusItem {
+  command = vscode.commands.registerCommand(
+    Command.ToggleFeatures,
+    this.toggleFeatures,
+    this
+  );
+
   private descriptions: { [key: string]: string } = {};
 
   constructor(client: ClientInterface) {
@@ -275,41 +273,37 @@ export class FeaturesStatus extends StatusItem {
     } features enabled`;
   }
 
-  registerCommand(): void {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(Command.ToggleFeatures, async () => {
-        const configuration = vscode.workspace.getConfiguration("rubyLsp");
-        const features: { [key: string]: boolean } =
-          configuration.get("enabledFeatures")!;
-        const allFeatures = Object.keys(features);
-        const options: vscode.QuickPickItem[] = allFeatures.map((label) => {
-          return {
-            label,
-            picked: features[label],
-            description: this.descriptions[label],
-          };
-        });
+  private async toggleFeatures() {
+    const configuration = vscode.workspace.getConfiguration("rubyLsp");
+    const features: { [key: string]: boolean } =
+      configuration.get("enabledFeatures")!;
+    const allFeatures = Object.keys(features);
+    const options: vscode.QuickPickItem[] = allFeatures.map((label) => {
+      return {
+        label,
+        picked: features[label],
+        description: this.descriptions[label],
+      };
+    });
 
-        const toggledFeatures = await vscode.window.showQuickPick(options, {
-          canPickMany: true,
-          placeHolder: "Select the features you would like to enable",
-        });
+    const toggledFeatures = await vscode.window.showQuickPick(options, {
+      canPickMany: true,
+      placeHolder: "Select the features you would like to enable",
+    });
 
-        if (toggledFeatures !== undefined) {
-          // The `picked` property is only used to determine if the checkbox is checked initially. When we receive the
-          // response back from the QuickPick, we need to use inclusion to check if the feature was selected
-          allFeatures.forEach((feature) => {
-            features[feature] = toggledFeatures.some(
-              (selected) => selected.label === feature
-            );
-          });
+    if (toggledFeatures !== undefined) {
+      // The `picked` property is only used to determine if the checkbox is checked initially. When we receive the
+      // response back from the QuickPick, we need to use inclusion to check if the feature was selected
+      allFeatures.forEach((feature) => {
+        features[feature] = toggledFeatures.some(
+          (selected) => selected.label === feature
+        );
+      });
 
-          await vscode.workspace
-            .getConfiguration("rubyLsp")
-            .update("enabledFeatures", features, true, true);
-        }
-      })
-    );
+      await vscode.workspace
+        .getConfiguration("rubyLsp")
+        .update("enabledFeatures", features, true, true);
+    }
   }
 }
 
@@ -324,9 +318,10 @@ export class StatusItems {
       new YjitStatus(client),
       new FeaturesStatus(client),
     ];
+    this.refresh();
   }
 
-  public refresh() {
+  public refresh(): void {
     this.items.forEach((item) => item.refresh());
   }
 }
