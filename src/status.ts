@@ -24,20 +24,18 @@ export interface ClientInterface {
 export abstract class StatusItem {
   public item: vscode.LanguageStatusItem;
   protected command?: Disposable;
-  protected client: ClientInterface;
 
-  constructor(id: string, client: ClientInterface) {
+  constructor(id: string, context: vscode.ExtensionContext) {
     this.item = vscode.languages.createLanguageStatusItem(id, {
       scheme: "file",
       language: "ruby",
     });
-    this.client = client;
     if (this.command) {
-      this.client.context.subscriptions.push(this.command);
+      context.subscriptions.push(this.command);
     }
   }
 
-  abstract refresh(): void;
+  abstract refresh(client: ClientInterface): void;
 
   dispose(): void {
     this.item.dispose();
@@ -51,8 +49,8 @@ export class RubyVersionStatus extends StatusItem {
     this
   );
 
-  constructor(client: ClientInterface) {
-    super("rubyVersion", client);
+  constructor(context: vscode.ExtensionContext) {
+    super("rubyVersion", context);
     this.item.name = "Ruby LSP Status";
     this.item.command = {
       title: "Change version manager",
@@ -60,12 +58,12 @@ export class RubyVersionStatus extends StatusItem {
     };
   }
 
-  refresh(): void {
-    if (this.client.ruby.error) {
+  refresh(client: ClientInterface): void {
+    if (client.ruby.error) {
       this.item.text = "Failed to activate Ruby";
       this.item.severity = vscode.LanguageStatusSeverity.Error;
     } else {
-      this.item.text = `Using Ruby ${this.client.ruby.rubyVersion}`;
+      this.item.text = `Using Ruby ${client.ruby.rubyVersion}`;
       this.item.severity = vscode.LanguageStatusSeverity.Information;
     }
   }
@@ -89,8 +87,8 @@ export class ServerStatus extends StatusItem {
     this
   );
 
-  constructor(client: ClientInterface) {
-    super("server", client);
+  constructor(context: vscode.ExtensionContext) {
+    super("server", context);
     this.item.name = "Ruby LSP Status";
     this.item.text = "Ruby LSP: Starting";
     this.item.severity = vscode.LanguageStatusSeverity.Information;
@@ -101,8 +99,8 @@ export class ServerStatus extends StatusItem {
     };
   }
 
-  refresh(): void {
-    switch (this.client.state) {
+  refresh(client: ClientInterface): void {
+    switch (client.state) {
       case ServerState.Running:
       case ServerState.Starting: {
         this.item.text = "Ruby LSP: Starting";
@@ -143,8 +141,8 @@ export class ExperimentalFeaturesStatus extends StatusItem {
     this
   );
 
-  constructor(client: ClientInterface) {
-    super("experimentalFeatures", client);
+  constructor(context: vscode.ExtensionContext) {
+    super("experimentalFeatures", context);
     const experimentalFeaturesEnabled =
       vscode.workspace
         .getConfiguration("rubyLsp")
@@ -191,18 +189,18 @@ export class YjitStatus extends StatusItem {
     this
   );
 
-  constructor(client: ClientInterface) {
-    super("yjit", client);
+  constructor(context: vscode.ExtensionContext) {
+    super("yjit", context);
 
     this.item.name = "YJIT";
   }
 
-  refresh(): void {
+  refresh(client: ClientInterface): void {
     const useYjit: boolean | undefined = vscode.workspace
       .getConfiguration("rubyLsp")
       .get("yjit");
 
-    if (useYjit && this.client.ruby.supportsYjit) {
+    if (useYjit && client.ruby.supportsYjit) {
       this.item.text = "YJIT enabled";
 
       this.item.command = {
@@ -212,7 +210,7 @@ export class YjitStatus extends StatusItem {
     } else {
       this.item.text = "YJIT disabled";
 
-      if (this.client.ruby.supportsYjit) {
+      if (client.ruby.supportsYjit) {
         this.item.command = {
           title: "Enable",
           command: Command.ToggleYjit,
@@ -239,8 +237,8 @@ export class FeaturesStatus extends StatusItem {
 
   private descriptions: { [key: string]: string } = {};
 
-  constructor(client: ClientInterface) {
-    super("features", client);
+  constructor(context: vscode.ExtensionContext) {
+    super("features", context);
     this.item.name = "Ruby LSP Features";
     this.item.command = {
       title: "Manage",
@@ -313,17 +311,17 @@ export class StatusItems {
 
   constructor(client: ClientInterface) {
     this.items = [
-      new RubyVersionStatus(client),
-      new ServerStatus(client),
-      new ExperimentalFeaturesStatus(client),
-      new YjitStatus(client),
-      new FeaturesStatus(client),
+      new RubyVersionStatus(client.context),
+      new ServerStatus(client.context),
+      new ExperimentalFeaturesStatus(client.context),
+      new YjitStatus(client.context),
+      new FeaturesStatus(client.context),
     ];
-    this.refresh();
+    this.refresh(client);
     client.onStateChange(this.refresh, this);
   }
 
-  public refresh(): void {
-    this.items.forEach((item) => item.refresh());
+  public refresh(client: ClientInterface): void {
+    this.items.forEach((item) => item.refresh(client));
   }
 }
