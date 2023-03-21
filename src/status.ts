@@ -18,6 +18,7 @@ export interface ClientInterface {
   context: vscode.ExtensionContext;
   ruby: Ruby;
   state: ServerState;
+  onStateChange: vscode.Event<ClientInterface>;
 }
 
 export abstract class StatusItem {
@@ -319,6 +320,7 @@ export class StatusItems {
       new FeaturesStatus(client),
     ];
     this.refresh();
+    client.onStateChange(this.refresh, this);
   }
 
   public refresh(): void {

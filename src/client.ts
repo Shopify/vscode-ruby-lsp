@@ -34,6 +34,7 @@ export default class Client implements ClientInterface {
   #context: vscode.ExtensionContext;
   #ruby: Ruby;
   #state: ServerState = ServerState.Starting;
+  #onStateChangeEmitter = new vscode.EventEmitter<ClientInterface>();
 
   constructor(
     context: vscode.ExtensionContext,
@@ -203,6 +204,10 @@ export default class Client implements ClientInterface {
     }
   }
 
+  get onStateChange(): vscode.Event<ClientInterface> {
+    return this.#onStateChangeEmitter.event;
+  }
+
   get ruby(): Ruby {
     return this.#ruby;
   }
@@ -225,7 +230,7 @@ export default class Client implements ClientInterface {
 
   private set state(state: ServerState) {
     this.#state = state;
-    this.statusItems.refresh();
+    this.#onStateChangeEmitter.fire(this);
   }
 
   private registerCommands() {
