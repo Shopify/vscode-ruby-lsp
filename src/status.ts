@@ -42,13 +42,14 @@ export class RubyVersionStatus extends StatusItem {
     this
   );
 
-  constructor() {
+  constructor(client: Client) {
     super("rubyVersion");
     this.item.name = "Ruby LSP Status";
     this.item.command = {
       title: "Change version manager",
       command: Command.SelectVersionManager,
     };
+    this.refresh(client);
   }
 
   refresh(client: Client): void {
@@ -182,10 +183,11 @@ export class YjitStatus extends StatusItem {
     this
   );
 
-  constructor() {
+  constructor(client: Client) {
     super("yjit");
 
     this.item.name = "YJIT";
+    this.refresh(client);
   }
 
   refresh(client: Client): void {
@@ -304,13 +306,12 @@ export class StatusItems {
 
   constructor(client: Client) {
     this.items = [
-      new RubyVersionStatus(),
+      new RubyVersionStatus(client),
       new ServerStatus(),
       new ExperimentalFeaturesStatus(),
-      new YjitStatus(),
+      new YjitStatus(client),
       new FeaturesStatus(),
     ];
-    this.refresh(client);
     client.onStateChange(this.refresh, this);
   }
 
