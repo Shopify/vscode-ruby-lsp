@@ -18,19 +18,19 @@ export abstract class StatusItem {
   public item: vscode.LanguageStatusItem;
   protected command?: Disposable;
 
-  constructor(id: string, context: vscode.ExtensionContext) {
+  constructor(id: string) {
     this.item = vscode.languages.createLanguageStatusItem(id, {
       scheme: "file",
       language: "ruby",
     });
-    if (this.command) {
-      context.subscriptions.push(this.command);
-    }
   }
 
   abstract refresh(client: Client): void;
 
   dispose(): void {
+    if (this.command) {
+      this.command.dispose();
+    }
     this.item.dispose();
   }
 }
@@ -42,8 +42,8 @@ export class RubyVersionStatus extends StatusItem {
     this
   );
 
-  constructor(context: vscode.ExtensionContext) {
-    super("rubyVersion", context);
+  constructor() {
+    super("rubyVersion");
     this.item.name = "Ruby LSP Status";
     this.item.command = {
       title: "Change version manager",
@@ -80,8 +80,8 @@ export class ServerStatus extends StatusItem {
     this
   );
 
-  constructor(context: vscode.ExtensionContext) {
-    super("server", context);
+  constructor() {
+    super("server");
     this.item.name = "Ruby LSP Status";
     this.item.text = "Ruby LSP: Starting";
     this.item.severity = vscode.LanguageStatusSeverity.Information;
@@ -134,8 +134,8 @@ export class ExperimentalFeaturesStatus extends StatusItem {
     this
   );
 
-  constructor(context: vscode.ExtensionContext) {
-    super("experimentalFeatures", context);
+  constructor() {
+    super("experimentalFeatures");
     const experimentalFeaturesEnabled =
       vscode.workspace
         .getConfiguration("rubyLsp")
@@ -182,8 +182,8 @@ export class YjitStatus extends StatusItem {
     this
   );
 
-  constructor(context: vscode.ExtensionContext) {
-    super("yjit", context);
+  constructor() {
+    super("yjit");
 
     this.item.name = "YJIT";
   }
@@ -230,8 +230,8 @@ export class FeaturesStatus extends StatusItem {
 
   private descriptions: { [key: string]: string } = {};
 
-  constructor(context: vscode.ExtensionContext) {
-    super("features", context);
+  constructor() {
+    super("features");
     this.item.name = "Ruby LSP Features";
     this.item.command = {
       title: "Manage",
@@ -304,11 +304,11 @@ export class StatusItems {
 
   constructor(client: Client) {
     this.items = [
-      new RubyVersionStatus(client.context),
-      new ServerStatus(client.context),
-      new ExperimentalFeaturesStatus(client.context),
-      new YjitStatus(client.context),
-      new FeaturesStatus(client.context),
+      new RubyVersionStatus(),
+      new ServerStatus(),
+      new ExperimentalFeaturesStatus(),
+      new YjitStatus(),
+      new FeaturesStatus(),
     ];
     this.refresh(client);
     client.onStateChange(this.refresh, this);
