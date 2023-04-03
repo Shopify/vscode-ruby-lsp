@@ -48,6 +48,7 @@ by clicking `Change version manager` in the language status center or by changin
 // "none" (do not use a version manager)
 // "asdf"
 // "chruby"
+// "frum"
 // "rbenv"
 // "rvm"
 // "shadowenv"
