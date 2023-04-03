@@ -49,6 +49,7 @@ by clicking `Change version manager` in the language status center or by changin
 // "asdf"
 // "chruby"
 // "rbenv"
+// "rtx"
 // "rvm"
 // "shadowenv"
 "rubyLsp.rubyVersionManager": "chruby"

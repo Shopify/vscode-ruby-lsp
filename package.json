@@ -150,6 +150,7 @@
             "chruby",
             "none",
             "rbenv",
+            "rtx",
             "rvm",
             "shadowenv"
           ],

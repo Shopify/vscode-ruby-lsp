@@ -12,6 +12,7 @@ export enum VersionManager {
   Auto = "auto",
   Chruby = "chruby",
   Rbenv = "rbenv",
+  Rtx = "rtx",
   Rvm = "rvm",
   Shadowenv = "shadowenv",
   None = "none",
@@ -70,6 +71,9 @@ export class Ruby {
           break;
         case VersionManager.Rbenv:
           await this.activate("rbenv exec ruby");
+          break;
+        case VersionManager.Rtx:
+          await this.activate("rtx exec ruby --");
           break;
         case VersionManager.Rvm:
           await this.activate("rvm-auto-ruby");
@@ -236,6 +240,7 @@ export class Ruby {
       VersionManager.Asdf,
       VersionManager.Chruby,
       VersionManager.Rbenv,
+      VersionManager.Rtx,
       VersionManager.Rvm,
     ];
 
