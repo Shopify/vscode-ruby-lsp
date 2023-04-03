@@ -73,7 +73,7 @@ export class Ruby {
           await this.activate("rbenv exec ruby");
           break;
         case VersionManager.Rtx:
-          await this.activate("rtx exec ruby --");
+          await this.activate("rtx exec -- ruby");
           break;
         case VersionManager.Rvm:
           await this.activate("rvm-auto-ruby");
