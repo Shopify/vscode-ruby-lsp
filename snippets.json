@@ -173,12 +173,12 @@
     "description": "New if statement."
   },
   "If else": {
-    "prefix": ["if"],
+    "prefix": ["ife"],
     "body": ["if $1", "  $0", "else", "end"],
     "description": "New if statement with else."
   },
   "If elsif": {
-    "prefix": ["if"],
+    "prefix": ["ifel"],
     "body": ["if $1", "  $0", "elsif $2", "  $0", "end"],
     "description": "New if statement with elsif."
   },
