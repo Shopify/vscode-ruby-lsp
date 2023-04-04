@@ -11,6 +11,7 @@ export enum VersionManager {
   Asdf = "asdf",
   Auto = "auto",
   Chruby = "chruby",
+  Frum = "frum",
   Rbenv = "rbenv",
   Rvm = "rvm",
   Shadowenv = "shadowenv",
@@ -67,6 +68,9 @@ export class Ruby {
           break;
         case VersionManager.Chruby:
           await this.activateChruby();
+          break;
+        case VersionManager.Frum:
+          await this.activate("eval \"$(frum init)\" && ruby");
           break;
         case VersionManager.Rbenv:
           await this.activate("rbenv exec ruby");
@@ -253,6 +257,7 @@ export class Ruby {
     const managers = [
       VersionManager.Asdf,
       VersionManager.Chruby,
+      VersionManager.Frum,
       VersionManager.Rbenv,
       VersionManager.Rvm,
     ];
