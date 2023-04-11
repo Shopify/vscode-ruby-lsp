@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import os from "os";
 
 import * as vscode from "vscode";
 
@@ -107,7 +108,7 @@ export class Debugger
   private attachDebuggee(): Promise<vscode.DebugAdapterDescriptor | undefined> {
     // When using attach, a process will be launched using Ruby debug and it will create a socket automatically. We have
     // to find the available sockets and ask the user which one they want to attach to
-    const socketsDir = path.join("/", "tmp", "ruby-lsp-debug-sockets");
+    const socketsDir = path.join(os.tmpdir(), "ruby-lsp-debug-sockets");
     const sockets = fs
       .readdirSync(socketsDir)
       .map((file) => file)
@@ -207,7 +208,7 @@ export class Debugger
   // Generate a socket path so that Ruby debug doesn't have to create one for us. This makes coordination easier since
   // we always know the path to the socket
   private socketPath() {
-    const socketsDir = path.join("/", "tmp", "ruby-lsp-debug-sockets");
+    const socketsDir = path.join(os.tmpdir(), "ruby-lsp-debug-sockets");
     if (!fs.existsSync(socketsDir)) {
       fs.mkdirSync(socketsDir);
     }

@@ -92,13 +92,13 @@ export default class Client implements ClientInterface {
     };
 
     const executable: Executable = {
-      command: "bundle",
+      command: (process.platform == 'win32') ? "bundle.bat" : "bundle",
       args: ["exec", "ruby-lsp"],
       options: executableOptions,
     };
 
     const debugExecutable: Executable = {
-      command: "bundle",
+      command: (process.platform == 'win32') ? "bundle.bat" : "bundle",
       args: ["exec", "ruby-lsp", "--debug"],
       options: executableOptions,
     };
@@ -519,7 +519,7 @@ export default class Client implements ClientInterface {
 
       this.outputChannel.appendLine(">> Running `bundle install`...");
 
-      const install = spawn("bundle", ["install"], {
+      const install = spawn((process.platform == 'win32') ? "bundle.bat" : "bundle", ["install"], {
         cwd: this.workingFolder,
         signal: abortController.signal,
         env,

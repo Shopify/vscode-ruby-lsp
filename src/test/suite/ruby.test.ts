@@ -9,7 +9,9 @@ suite("Ruby environment activation", () => {
 
   test("Activate fetches Ruby information when outside of Ruby LSP", async () => {
     // eslint-disable-next-line no-process-env
-    process.env.SHELL = "/bin/bash";
+    if (process.platform != 'win32') {
+      process.env.SHELL = "/bin/bash";
+    }
 
     const context = {
       extensionMode: vscode.ExtensionMode.Test,
@@ -20,11 +22,19 @@ suite("Ruby environment activation", () => {
     await ruby.activateRuby(VersionManager.None);
 
     assert.ok(ruby.rubyVersion, "Expected Ruby version to be set");
-    assert.strictEqual(
-      ruby.supportsYjit,
-      true,
-      "Expected YJIT support to be enabled"
-    );
+    if (process.platform == 'win32') {
+      assert.strictEqual(
+        ruby.supportsYjit,
+        false,
+        "Expected YJIT support not to be enabled"
+      );
+    } else {
+      assert.strictEqual(
+        ruby.supportsYjit,
+        true,
+        "Expected YJIT support to be enabled"
+      );
+    }
     assert.strictEqual(
       ruby.env.BUNDLE_GEMFILE,
       // eslint-disable-next-line no-process-env

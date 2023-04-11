@@ -136,7 +136,8 @@ export class Ruby {
   }
 
   private async activate(ruby: string) {
-    const result = await asyncExec(
+    const result = await asyncExec((process.platform == 'win32') ?
+      `${ruby} --disable-gems -rjson -e 'printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE}, JSON.dump(ENV.to_h))'` :
       `${this.shell} -ic '${ruby} --disable-gems -rjson -e "printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE}, JSON.dump(ENV.to_h))"'`,
       { cwd: this.workingFolder }
     );
@@ -284,7 +285,7 @@ export class Ruby {
 
   private async toolExists(tool: string) {
     try {
-      await asyncExec(`${this.shell} -lic '${tool} --version'`);
+      await asyncExec((process.platform == 'win32') ? `${tool} --version` : `${this.shell} -ic '${tool} --version'`);
       return true;
     } catch {
       return false;
