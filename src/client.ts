@@ -519,7 +519,8 @@ export default class Client implements ClientInterface {
 
       this.outputChannel.appendLine(">> Running `bundle install`...");
 
-      const install = spawn((process.platform == 'win32') ? "bundle.bat" : "bundle", ["install"], {
+      const install = spawn("bundle", ["install"], {
+        shell: true,
         cwd: this.workingFolder,
         signal: abortController.signal,
         env,
