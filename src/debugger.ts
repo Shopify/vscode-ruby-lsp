@@ -192,7 +192,7 @@ export class Debugger
       // code zero here is because debug actually exits with 1 if the user cancels the debug session, which is not
       // actually an error
       this.debugProcess.on("exit", (code) => {
-        if (code && code > 1) {
+        if (code && code !== 0) {
           const message = `
           Debuggee failed to launch "${session.configuration.program}" with exit status ${code}. This may indicate an
           issue with your launch configurations.`;
