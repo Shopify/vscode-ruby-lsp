@@ -3,6 +3,8 @@ import fs from "fs";
 import readline from "readline";
 import { promisify } from "util";
 import { exec, spawn } from "child_process";
+import { performance as Perf } from "perf_hooks";
+import { randomUUID } from "crypto";
 
 import * as vscode from "vscode";
 import {
@@ -10,9 +12,10 @@ import {
   LanguageClient,
   Executable,
   RevealOutputChannelOn,
+  MessageSignature,
 } from "vscode-languageclient/node";
 
-import { Telemetry } from "./telemetry";
+import { Telemetry, TelemetryEvent } from "./telemetry";
 import { Ruby } from "./ruby";
 import { StatusItems, Command, ServerState, ClientInterface } from "./status";
 
@@ -35,6 +38,7 @@ export default class Client implements ClientInterface {
     | undefined;
 
   private terminal: vscode.Terminal | undefined;
+  private serverVersion: string | undefined;
   #context: vscode.ExtensionContext;
   #ruby: Ruby;
   #state: ServerState = ServerState.Starting;
@@ -86,6 +90,8 @@ export default class Client implements ClientInterface {
       return;
     }
 
+    this.serverVersion = await this.getServerVersion();
+
     const executableOptions = {
       cwd: this.workingFolder,
       env: this.ruby.env,
@@ -117,6 +123,71 @@ export default class Client implements ClientInterface {
         formatter: configuration.get("formatter"),
       },
       middleware: {
+        sendRequest: async <TP, T>(
+          type: string | MessageSignature,
+          param: TP | undefined,
+          token: vscode.CancellationToken,
+          next: (
+            type: string | MessageSignature,
+            param?: TP,
+            token?: vscode.CancellationToken
+          ) => Promise<T>
+        ) => {
+          const request = typeof type === "string" ? type : type.method;
+          // Instantiate base telemetry data
+          const telemetryData: TelemetryEvent = {
+            request,
+            rubyVersion: this.ruby.rubyVersion!,
+            yjitEnabled: this.ruby.yjitEnabled!,
+            lspVersion: this.serverVersion!,
+            requestTime: 0,
+          };
+
+          // If there are parameters in the request, include those
+          if (param) {
+            const params = JSON.parse(JSON.stringify(param));
+            this.recursivelySanitizeUris(params);
+
+            const uri = params.textDocument?.uri;
+            delete params.textDocument;
+
+            telemetryData.params = params;
+            telemetryData.uri = uri;
+          }
+
+          let result: T | undefined;
+          let errorResult;
+
+          const benchmarkId = randomUUID();
+          // Execute the request measuring the time it takes to receive the response
+          Perf.mark(`${benchmarkId}.start`);
+          try {
+            result = await next(type, param, token);
+          } catch (error: any) {
+            // If any errors occurred in the request, we'll receive these from the LSP server
+            telemetryData.errorClass = error.data.errorClass;
+            telemetryData.errorMessage = error.data.errorMessage;
+            telemetryData.backtrace = error.data.backtrace;
+            errorResult = error;
+          }
+          Perf.mark(`${benchmarkId}.end`);
+
+          // Insert benchmarked response time into telemetry data
+          const bench = Perf.measure(
+            "benchmarks",
+            `${benchmarkId}.start`,
+            `${benchmarkId}.end`
+          );
+          telemetryData.requestTime = bench.duration;
+          this.telemetry.sendEvent(telemetryData);
+
+          // If there has been an error, we must throw it again. Otherwise we can return the result
+          if (errorResult) {
+            throw errorResult;
+          }
+
+          return result!;
+        },
         provideOnTypeFormattingEdits: async (
           document,
           position,
@@ -180,16 +251,7 @@ export default class Client implements ClientInterface {
       clientOptions
     );
 
-    this.client.onTelemetry((event) =>
-      this.telemetry.sendEvent({
-        ...event,
-        rubyVersion: this.ruby.rubyVersion,
-        yjitEnabled: this.ruby.yjitEnabled,
-      })
-    );
-
     await this.client.start();
-
     this.state = ServerState.Running;
   }
 
@@ -417,6 +479,21 @@ export default class Client implements ClientInterface {
     }
   }
 
+  private async getServerVersion(): Promise<string> {
+    const result = await asyncExec(
+      `BUNDLE_GEMFILE=${path.join(
+        this.workingFolder,
+        "Gemfile"
+      )} bundle exec ruby -e "require 'ruby-lsp'; print RubyLsp::VERSION"`,
+      {
+        cwd: this.workingFolder,
+        env: this.ruby.env,
+      }
+    );
+
+    return result.stdout;
+  }
+
   private async gemsAreInstalled(customGemfilePath: string): Promise<boolean> {
     try {
       await asyncExec(`BUNDLE_GEMFILE=${customGemfilePath} bundle check`, {
@@ -587,5 +664,17 @@ export default class Client implements ClientInterface {
       (fs.existsSync(path.join(gitFolder, "rebase-merge")) ||
         fs.existsSync(path.join(gitFolder, "rebase-apply")))
     );
+  }
+
+  private recursivelySanitizeUris(object: any): void {
+    for (const key in object) {
+      if (typeof object[key] === "object" && object[key] !== null) {
+        this.recursivelySanitizeUris(object[key]);
+      } else if (key === "uri" && typeof object[key] === "string") {
+        const path = vscode.Uri.parse(object[key]).fsPath;
+        // eslint-disable-next-line no-process-env
+        object[key] = path.replace(process.env.HOME!, "~");
+      }
+    }
   }
 }
