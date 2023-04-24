@@ -20,6 +20,7 @@ export enum Command {
   ToggleYjit = "rubyLsp.toggleYjit",
   SelectVersionManager = "rubyLsp.selectRubyVersionManager",
   ToggleFeatures = "rubyLsp.toggleFeatures",
+  FormatterHelp = "rubyLsp.formatterHelp",
   RunTest = "rubyLsp.runTest",
 }
 
@@ -339,6 +340,39 @@ export class FeaturesStatus extends StatusItem {
   }
 }
 
+export class FormatterStatus extends StatusItem {
+  constructor(client: ClientInterface) {
+    super("formatter", client);
+
+    this.item.name = "Formatter";
+    this.item.command = {
+      title: "Help",
+      command: Command.FormatterHelp,
+    };
+    this.refresh();
+  }
+
+  refresh(): void {
+    const formatter: string = vscode.workspace
+      .getConfiguration("rubyLsp")
+      .get("formatter")!;
+
+    this.item.text = `Formatter: ${formatter}`;
+  }
+
+  registerCommand(): void {
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(Command.FormatterHelp, () => {
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            "https://github.com/Shopify/vscode-ruby-lsp#formatting"
+          )
+        );
+      })
+    );
+  }
+}
+
 export class StatusItems {
   private items: StatusItem[] = [];
 
@@ -349,6 +383,7 @@ export class StatusItems {
       new ExperimentalFeaturesStatus(client),
       new YjitStatus(client),
       new FeaturesStatus(client),
+      new FormatterStatus(client),
     ];
   }
 

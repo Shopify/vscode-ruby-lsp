@@ -14,6 +14,7 @@ import {
   ServerState,
   ClientInterface,
   FeaturesStatus,
+  FormatterStatus,
 } from "../../status";
 
 suite("StatusItems", () => {
@@ -251,6 +252,26 @@ suite("StatusItems", () => {
             }/${numberOfFeatures} features enabled`
           );
         });
+    });
+  });
+
+  suite("FormatterStatus", () => {
+    beforeEach(() => {
+      ruby = {} as Ruby;
+      client = {
+        context,
+        ruby,
+        state: ServerState.Running,
+      };
+      status = new FormatterStatus(client);
+    });
+
+    test("Status is initialized with the right values", async () => {
+      assert.strictEqual(status.item.text, "Formatter: auto");
+      assert.strictEqual(status.item.name, "Formatter");
+      assert.strictEqual(status.item.command?.title, "Help");
+      assert.strictEqual(status.item.command?.command, Command.FormatterHelp);
+      assert.strictEqual(context.subscriptions.length, 1);
     });
   });
 });
