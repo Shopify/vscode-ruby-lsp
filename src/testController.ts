@@ -142,28 +142,26 @@ export class TestController {
         continue;
       }
 
-      if (test.id.startsWith("test_")) {
-        const start = Date.now();
-        try {
-          await this.assertTestPasses(test);
-          run.passed(test, Date.now() - start);
-        } catch (err: any) {
-          const messageArr = err.message.split("\n");
+      const start = Date.now();
+      try {
+        await this.assertTestPasses(test);
+        run.passed(test, Date.now() - start);
+      } catch (err: any) {
+        const messageArr = err.message.split("\n");
 
-          // Minitest and test/unit outputs are formatted differently so we need to slice the message
-          // differently to get an output format that only contains essential information
-          // If the first element of the message array is "", we know the output is a Minitest output
-          const testMessage =
-            messageArr[0] === ""
-              ? messageArr.slice(10, messageArr.length - 2).join("\n")
-              : messageArr.slice(4, messageArr.length - 9).join("\n");
+        // Minitest and test/unit outputs are formatted differently so we need to slice the message
+        // differently to get an output format that only contains essential information
+        // If the first element of the message array is "", we know the output is a Minitest output
+        const testMessage =
+          messageArr[0] === ""
+            ? messageArr.slice(10, messageArr.length - 2).join("\n")
+            : messageArr.slice(4, messageArr.length - 9).join("\n");
 
-          run.failed(
-            test,
-            new vscode.TestMessage(testMessage),
-            Date.now() - start
-          );
-        }
+        run.failed(
+          test,
+          new vscode.TestMessage(testMessage),
+          Date.now() - start
+        );
       }
 
       test.children.forEach((test) => queue.push(test));
