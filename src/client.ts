@@ -89,6 +89,8 @@ export default class Client implements ClientInterface {
       return;
     }
 
+    this.fetchGemVersion();
+
     const executableOptions = {
       cwd: this.workingFolder,
       env: this.ruby.env,
@@ -625,5 +627,23 @@ export default class Client implements ClientInterface {
       (fs.existsSync(path.join(gitFolder, "rebase-merge")) ||
         fs.existsSync(path.join(gitFolder, "rebase-apply")))
     );
+  }
+
+  private async fetchGemVersion() {
+    // TODO: need to ensure we're checking the version in the bundle
+    const rubyInfo = await asyncExec(
+      `ruby -e "require 'ruby-lsp'; puts RubyLsp::VERSION"`
+    );
+
+    const versionString = rubyInfo.stdout.trim();
+    const [major, minor, _patch] = versionString.split(".").map(Number);
+
+    // TODO: choose actual minor version
+    if (major === 0 && minor < 4000) {
+      vscode.window.showErrorMessage(
+        `The ruby-lsp gem version ${versionString} is too old for the VS Code extension. Please update to the latest version."`
+      );
+    }
+    // TODO: Should this block Ruby LSP from starting?
   }
 }
