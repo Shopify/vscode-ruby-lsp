@@ -16,6 +16,7 @@ export class TestController {
   private workingFolder: string;
   private terminal: vscode.Terminal | undefined;
   private ruby: Ruby;
+  private minitestTag = new vscode.TestTag("minitest");
 
   constructor(
     context: vscode.ExtensionContext,
@@ -40,7 +41,7 @@ export class TestController {
       },
       true
     );
-    this.testRunProfile.tag = new vscode.TestTag("minitest");
+    this.testRunProfile.tag = this.minitestTag;
 
     vscode.commands.executeCommand("testing.clearTestResults");
     vscode.window.onDidCloseTerminal((terminal: vscode.Terminal): void => {
@@ -145,7 +146,8 @@ export class TestController {
         continue;
       }
 
-      if (test.tags.includes(new vscode.TestTag("minitest"))) {
+      // older versions of ruby-lsp will not include the minitest tag, so we need to fall back to checking the test name.
+      if (test.tags.includes(this.minitestTag) || test.id.startsWith("test_")) {
         const start = Date.now();
         try {
           await this.assertTestPasses(test);
