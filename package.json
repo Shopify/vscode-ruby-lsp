@@ -19,7 +19,7 @@
   ],
   "activationEvents": [
     "onLanguage:ruby",
-    "workspaceContains:Gemfile.lock"
+    "workspaceContains:**/Gemfile.lock"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -178,6 +178,11 @@
         },
         "rubyLsp.bundleGemfile": {
           "description": "Relative path to the Gemfile to use for bundling the Ruby LSP server. Only necessary when using a separate Gemfile for the Ruby LSP",
+          "type": "string",
+          "default": ""
+        },
+        "rubyLsp.customWorkspaceFolder": {
+          "description": "A custom working directory for the Ruby LSP server. Only necessary if your Gemfile isn't located at the VS Code workspace root",
           "type": "string",
           "default": ""
         }
