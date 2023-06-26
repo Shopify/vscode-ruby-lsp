@@ -11,7 +11,11 @@ const asyncExec = promisify(exec);
 
 export class TestController {
   private testController: vscode.TestController;
-  private testCommands: WeakMap<vscode.TestItem, string>;
+  private testCommands: WeakMap<
+    vscode.TestItem,
+    { command: string; identifier: string }
+  >;
+
   private testRunProfile: vscode.TestRunProfile;
   private testDebugProfile: vscode.TestRunProfile;
   private debugTag: vscode.TestTag = new vscode.TestTag("debug");
@@ -32,7 +36,10 @@ export class TestController {
       "Ruby Tests"
     );
 
-    this.testCommands = new WeakMap<vscode.TestItem, string>();
+    this.testCommands = new WeakMap<
+      vscode.TestItem,
+      { command: string; identifier: string }
+    >();
 
     this.testRunProfile = this.testController.createRunProfile(
       "Run",
@@ -91,37 +98,44 @@ export class TestController {
 
     response.forEach((res) => {
       const [_, name, command, location] = res.command!.arguments!;
-      const testItem: vscode.TestItem = this.testController.createTestItem(
-        name,
-        name,
-        uri
-      );
+      let testItem;
 
-      if (res.data?.kind) {
-        testItem.tags = [new vscode.TestTag(res.data.kind)];
-      } else if (name.startsWith("test_")) {
-        // Older Ruby LSP versions may not include 'kind' so we try infer it from the name.
-        testItem.tags = [new vscode.TestTag("example")];
-      }
+      let id = name.replace(/\s/g, "_");
 
-      this.testCommands.set(testItem, command);
+      if (res.data?.kind === "example") {
+        // When running Rails tests the names don't automatically include `test_`. We need it to find tests later
+        if (!id.startsWith("test_")) {
+          id = `test_${id}`;
+        }
 
-      testItem.range = new vscode.Range(
-        new vscode.Position(location.start_line, location.start_column),
-        new vscode.Position(location.end_line, location.end_column)
-      );
-
-      // Add test methods as children to the test class so it appears nested in Test explorer
-      // and running the test class will run all of the test methods
-
-      if (testItem.tags.find((tag) => tag.id === "example")) {
-        testItem.tags = [...testItem.tags, this.debugTag];
+        testItem = this.testController.createTestItem(id, name, uri);
+        testItem.tags = [new vscode.TestTag("example"), this.debugTag];
         classTest.children.add(testItem);
-      } else {
+      } else if (res.data?.kind === "group") {
+        testItem = this.testController.createTestItem(id, name, uri);
+        testItem.tags = [new vscode.TestTag("group")];
         classTest = testItem;
         classTest.canResolveChildren = true;
         this.testController.items.add(testItem);
       }
+
+      testItem!.range = new vscode.Range(
+        new vscode.Position(location.start_line, location.start_column),
+        new vscode.Position(location.end_line, location.end_column)
+      );
+
+      let identifier: string = command.split(" ").pop();
+
+      // When executing Minitest or test-unit examples, we need to remove the forward slashes from the name regex from
+      // the identifier. This is not the case for Rails tests which use colon and line number.
+      if (!identifier.includes(":")) {
+        identifier = identifier.substring(1, identifier.length - 2);
+      }
+
+      this.testCommands.set(testItem!, {
+        command,
+        identifier,
+      });
     });
   }
 
@@ -157,71 +171,111 @@ export class TestController {
     const test = request.include![0];
 
     const start = Date.now();
-    await this.debugTest("", "", this.testCommands.get(test)!);
+    await this.debugTest("", "", this.testCommands.get(test)!.command);
     run.passed(test, Date.now() - start);
     run.end();
   }
 
   private async runHandler(
     request: vscode.TestRunRequest,
-    token: vscode.CancellationToken
+    _token: vscode.CancellationToken
   ) {
     const run = this.testController.createTestRun(request, undefined, true);
-    const queue: vscode.TestItem[] = [];
+    const allTests: vscode.TestItem[] = [];
 
-    if (request.include) {
-      request.include.forEach((test) => queue.push(test));
+    (request.include ?? this.testController.items).forEach((test) => {
+      allTests.push(test);
+    });
+
+    let queue = this.flattenTestList(request, allTests);
+    const identifiers = queue.map((t) => this.testCommands.get(t)!.identifier);
+    const command = this.testCommands.get(queue[0])!.command.split(" ");
+    // Remove the test identifier from the command to get just the base command (e.g.: bin/rails test)
+    command.pop();
+
+    // If it's a Rails test, we can just concatenate all identifiers, which will result in `foo.rb:5 foo.rb:10`.
+    // Otherwise, we build a regex that will match all tests we want to run
+    if (identifiers[0].includes(":")) {
+      command.push(identifiers.join(" "));
     } else {
-      this.testController.items.forEach((test) => queue.push(test));
+      command.push(`"/(${identifiers.join(")|(")})/"`);
     }
 
-    while (queue.length > 0 && !token.isCancellationRequested) {
-      const test = queue.pop()!;
+    const start = Date.now();
+    try {
+      await asyncExec(command.join(" "), {
+        cwd: this.workingFolder,
+        env: this.ruby.env,
+      });
+    } catch (error: any) {
+      // Splitting by `Failure:` will give us the initial summary in the first element and all failures in the rest
+      const failures: string[] = error.stdout.split("Failure:");
+      let match: RegExpMatchArray | null;
+      let testId: string;
+      failures.shift();
 
-      if (request.exclude?.includes(test)) {
-        continue;
-      }
+      // Because we run all tests in one command, we have to match each failure to its respective test item
+      failures.forEach((failure) => {
+        let normalizedMessage;
+        const parts = failure.split("\n");
 
-      if (test.tags.find((tag) => tag.id === "example")) {
-        const start = Date.now();
-        try {
-          await this.assertTestPasses(test);
-          run.passed(test, Date.now() - start);
-        } catch (err: any) {
-          const messageArr = err.message.split("\n");
-
-          // Minitest and test/unit outputs are formatted differently so we need to slice the message
-          // differently to get an output format that only contains essential information
-          // If the first element of the message array is "", we know the output is a Minitest output
-          const testMessage =
-            messageArr[0] === ""
-              ? messageArr.slice(10, messageArr.length - 2).join("\n")
-              : messageArr.slice(4, messageArr.length - 9).join("\n");
-
-          run.failed(
-            test,
-            new vscode.TestMessage(testMessage),
-            Date.now() - start
-          );
+        if (parts[0] === "") {
+          // Minitest
+          normalizedMessage = parts.slice(1, 4).join("\n");
+          match = normalizedMessage.match(/(.*) \[/);
+          testId = match![1];
+        } else {
+          // test-unit
+          normalizedMessage = parts[0];
+          match = normalizedMessage.match(/\s*(.*)\((.*)\):/);
+          testId = `${match![2]}#${match![1]}`;
         }
-      }
 
-      test.children.forEach((test) => queue.push(test));
+        const failedTest = queue.find((test) => {
+          const fullId = test.parent ? `${test.parent.id}#${test.id}` : test.id;
+          return testId.endsWith(fullId);
+        })!;
+
+        run.failed(
+          failedTest,
+          new vscode.TestMessage(normalizedMessage),
+          Date.now() - start
+        );
+
+        queue = queue.filter((test) => test !== failedTest);
+      });
     }
+
+    // After we marked the failures, the remaining tests in the queue have all passed
+    queue.forEach((test) => {
+      run.passed(test, Date.now() - start);
+    });
 
     // Make sure to end the run after all tests have been executed
     run.end();
   }
 
-  private async assertTestPasses(test: vscode.TestItem) {
-    try {
-      await asyncExec(this.testCommands.get(test)!, {
-        cwd: this.workingFolder,
-        env: this.ruby.env,
-      });
-    } catch (error: any) {
-      throw new Error(error.stdout);
+  private flattenTestList(
+    request: vscode.TestRunRequest,
+    items: vscode.TestItem[]
+  ) {
+    const queue = [...items];
+    const flattenList = [];
+
+    while (queue.length > 0) {
+      const test = queue.pop()!;
+
+      if (
+        test.tags.find((tag) => tag.id === "example") &&
+        !request.exclude?.includes(test)
+      ) {
+        flattenList.push(test);
+      }
+
+      test.children.forEach((test) => queue.push(test));
     }
+
+    return flattenList;
   }
 
   private async runOnClick(testId: string) {
