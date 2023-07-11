@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { Ruby, VersionManager } from "./ruby";
+import ServerExtension from "./serverExtension";
 
 export enum ServerState {
   Starting = "Starting",
@@ -21,6 +22,7 @@ export enum Command {
   SelectVersionManager = "rubyLsp.selectRubyVersionManager",
   ToggleFeatures = "rubyLsp.toggleFeatures",
   FormatterHelp = "rubyLsp.formatterHelp",
+  ManageExtensions = "rubyLsp.manageExtensions",
   RunTest = "rubyLsp.runTest",
   RunTestInTerminal = "rubyLsp.runTestInTerminal",
   DebugTest = "rubyLsp.debugTest",
@@ -43,6 +45,7 @@ export interface ClientInterface {
   ruby: Ruby;
   state: ServerState;
   formatter: string;
+  serverExtensions: ServerExtension[];
 }
 
 export abstract class StatusItem {
@@ -374,6 +377,81 @@ export class FormatterStatus extends StatusItem {
   }
 }
 
+export class ServerExtensionsStatus extends StatusItem {
+  constructor(client: ClientInterface) {
+    super("extensions", client);
+
+    this.item.name = "Server extensions";
+    this.item.command = {
+      title: "Manage",
+      command: Command.ManageExtensions,
+    };
+    this.refresh();
+  }
+
+  refresh(): void {
+    const erroredExtensions = this.client.serverExtensions.filter((ext) =>
+      ext.errored()
+    );
+
+    this.item.text = `${
+      this.client.serverExtensions.filter((ext) => ext.activated).length
+    } activated extensions`;
+
+    if (erroredExtensions.length > 0) {
+      this.item.severity = vscode.LanguageStatusSeverity.Error;
+    } else {
+      this.item.severity = vscode.LanguageStatusSeverity.Information;
+    }
+  }
+
+  registerCommand(): void {
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(Command.ManageExtensions, async () => {
+        const options: vscode.QuickPickItem[] = [];
+
+        this.client.serverExtensions
+          .filter((ext) => !ext.errored())
+          .forEach((ext) => {
+            options.push({
+              label: ext.name,
+              picked: ext.activated,
+              description: "Activated successfully",
+            });
+          });
+
+        options.push({
+          label: "Extensions with errors",
+          kind: vscode.QuickPickItemKind.Separator,
+        });
+
+        this.client.serverExtensions
+          .filter((ext) => ext.errored())
+          .forEach((ext) => {
+            options.push({
+              label: ext.name,
+              picked: ext.activated,
+              description: `Failed to activate: ${ext.errors.join(", ")}`,
+            });
+          });
+
+        const toggledExtensions = await vscode.window.showQuickPick(options, {
+          canPickMany: true,
+          placeHolder: "Activate or deactivate server extensions",
+        });
+
+        if (toggledExtensions !== undefined) {
+          this.client.serverExtensions.forEach((ext) => {
+            ext.activated = toggledExtensions.some(
+              (selected) => selected.label === ext.name
+            );
+          });
+        }
+      })
+    );
+  }
+}
+
 export class StatusItems {
   private items: StatusItem[] = [];
 
@@ -385,6 +463,7 @@ export class StatusItems {
       new YjitStatus(client),
       new FeaturesStatus(client),
       new FormatterStatus(client),
+      new ServerExtensionsStatus(client),
     ];
   }
 

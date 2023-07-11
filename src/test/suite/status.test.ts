@@ -15,7 +15,9 @@ import {
   ClientInterface,
   FeaturesStatus,
   FormatterStatus,
+  ServerExtensionsStatus,
 } from "../../status";
+import ServerExtension from "../../serverExtension";
 
 suite("StatusItems", () => {
   let ruby: Ruby;
@@ -43,6 +45,7 @@ suite("StatusItems", () => {
         ruby,
         state: ServerState.Running,
         formatter: "none",
+        serverExtensions: [],
       };
       status = new RubyVersionStatus(client);
     });
@@ -70,7 +73,13 @@ suite("StatusItems", () => {
   suite("ServerStatus", () => {
     beforeEach(() => {
       ruby = {} as Ruby;
-      client = { context, ruby, state: ServerState.Running, formatter: "none" };
+      client = {
+        context,
+        ruby,
+        state: ServerState.Running,
+        formatter: "none",
+        serverExtensions: [],
+      };
       status = new ServerStatus(client);
     });
 
@@ -135,6 +144,7 @@ suite("StatusItems", () => {
         ruby,
         formatter,
         state: ServerState.Running,
+        serverExtensions: [],
       };
       status = new ExperimentalFeaturesStatus(client);
     });
@@ -154,7 +164,13 @@ suite("StatusItems", () => {
   suite("YjitStatus when Ruby supports it", () => {
     beforeEach(() => {
       ruby = { supportsYjit: true } as Ruby;
-      client = { context, ruby, state: ServerState.Running, formatter: "none" };
+      client = {
+        context,
+        ruby,
+        state: ServerState.Running,
+        formatter: "none",
+        serverExtensions: [],
+      };
       status = new YjitStatus(client);
     });
 
@@ -178,7 +194,13 @@ suite("StatusItems", () => {
   suite("YjitStatus when Ruby does not support it", () => {
     beforeEach(() => {
       ruby = { supportsYjit: false } as Ruby;
-      client = { context, ruby, state: ServerState.Running, formatter: "none" };
+      client = {
+        context,
+        ruby,
+        state: ServerState.Running,
+        formatter: "none",
+        serverExtensions: [],
+      };
       status = new YjitStatus(client);
     });
 
@@ -212,6 +234,7 @@ suite("StatusItems", () => {
         ruby,
         formatter,
         state: ServerState.Running,
+        serverExtensions: [],
       });
     });
 
@@ -267,6 +290,7 @@ suite("StatusItems", () => {
         ruby,
         state: ServerState.Running,
         formatter: "auto",
+        serverExtensions: [],
       };
       status = new FormatterStatus(client);
     });
@@ -276,6 +300,50 @@ suite("StatusItems", () => {
       assert.strictEqual(status.item.name, "Formatter");
       assert.strictEqual(status.item.command?.title, "Help");
       assert.strictEqual(status.item.command?.command, Command.FormatterHelp);
+      assert.strictEqual(context.subscriptions.length, 1);
+    });
+  });
+
+  suite("ServerExtensionsStatus", () => {
+    beforeEach(() => {
+      ruby = {} as Ruby;
+      context = {
+        subscriptions: [],
+        workspaceState: {
+          get: (_name: string) => undefined,
+          update: (_name: string, _value: any) => {},
+        },
+      } as unknown as vscode.ExtensionContext;
+      const emitter = new vscode.EventEmitter<string>();
+      const deactivatedExtension = new ServerExtension(
+        context,
+        emitter,
+        "Deactivated extension",
+        []
+      );
+      deactivatedExtension.activated = false;
+
+      client = {
+        context,
+        ruby,
+        state: ServerState.Running,
+        formatter: "auto",
+        serverExtensions: [
+          new ServerExtension(context, emitter, "My extension", []),
+          deactivatedExtension,
+        ],
+      };
+      status = new ServerExtensionsStatus(client);
+    });
+
+    test("Status displays extension information and management options", async () => {
+      assert.strictEqual(status.item.text, "1 activated extensions");
+      assert.strictEqual(status.item.name, "Server extensions");
+      assert.strictEqual(status.item.command?.title, "Manage");
+      assert.strictEqual(
+        status.item.command?.command,
+        Command.ManageExtensions
+      );
       assert.strictEqual(context.subscriptions.length, 1);
     });
   });

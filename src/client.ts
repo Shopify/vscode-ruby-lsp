@@ -17,6 +17,7 @@ import { Telemetry } from "./telemetry";
 import { Ruby } from "./ruby";
 import { StatusItems, Command, ServerState, ClientInterface } from "./status";
 import { TestController } from "./testController";
+import ServerExtension from "./serverExtension";
 
 const LSP_NAME = "Ruby LSP";
 const asyncExec = promisify(exec);
@@ -39,10 +40,12 @@ export default class Client implements ClientInterface {
     | undefined;
 
   private testController: TestController;
+  private extensionEventEmitter = new vscode.EventEmitter<string>();
   #context: vscode.ExtensionContext;
   #ruby: Ruby;
   #state: ServerState = ServerState.Starting;
   #formatter: string;
+  #serverExtensions: ServerExtension[] = [];
 
   constructor(
     context: vscode.ExtensionContext,
@@ -120,6 +123,8 @@ export default class Client implements ClientInterface {
           "enableExperimentalFeatures"
         ),
         formatter: configuration.get("formatter"),
+        serverExtensions:
+          this.context.workspaceState.get("rubyLsp.extensions") ?? {},
       },
       middleware: {
         provideCodeLenses: async (document, token, next) => {
@@ -229,6 +234,8 @@ export default class Client implements ClientInterface {
     await this.determineFormatter();
 
     this.state = ServerState.Running;
+
+    await this.getRegisteredExtensions();
   }
 
   async stop(): Promise<void> {
@@ -316,6 +323,15 @@ export default class Client implements ClientInterface {
 
   private set state(state: ServerState) {
     this.#state = state;
+    this.statusItems.refresh();
+  }
+
+  get serverExtensions() {
+    return this.#serverExtensions;
+  }
+
+  private set serverExtensions(serverExtensions: ServerExtension[]) {
+    this.#serverExtensions = serverExtensions;
     this.statusItems.refresh();
   }
 
@@ -436,6 +452,12 @@ export default class Client implements ClientInterface {
           await this.ruby.activateRuby();
         }
 
+        await this.restart();
+      }
+    });
+
+    this.extensionEventEmitter.event(async (event) => {
+      if (event === "activation") {
         await this.restart();
       }
     });
@@ -723,6 +745,27 @@ export default class Client implements ClientInterface {
           preserveFocus: true,
         });
       }
+    }
+  }
+
+  private async getRegisteredExtensions() {
+    if (!this.client) {
+      return;
+    }
+
+    const response: { name: string; errors: string[] }[] | null =
+      await this.client.sendRequest("rubyLsp/workspace/registeredExtensions");
+
+    if (response) {
+      this.serverExtensions = response.map(
+        (extension) =>
+          new ServerExtension(
+            this.context,
+            this.extensionEventEmitter,
+            extension.name,
+            extension.errors
+          )
+      );
     }
   }
 }
