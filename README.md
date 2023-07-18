@@ -164,6 +164,14 @@ palette (Default hotkey: CMD + SHIFT + P).
 | Ruby LSP: Stop                       | Stop the Ruby LSP server                                |
 | Ruby LSP: Update language server gem | Updates the `ruby-lsp` server gem to the latest version |
 
+### Keybindings
+
+Default keybindings are given below. They can be changed to suit your preference.
+
+| Command         | Default Keybinding (Mac) |
+| --------------- | ------------------------ |
+| Run in Terminal | ctrl+alt+i               |
+
 ### Snippets
 
 This extension provides convenience snippets for common Ruby constructs, such as blocks, classes, methods or even unit

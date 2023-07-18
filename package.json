@@ -407,5 +407,12 @@
   },
   "dependencies": {
     "vscode-languageclient": "^8.1.0"
-  }
+  },
+  "keybindings": [
+    {
+      "command": "rubyLsp.runTestInTerminal",
+      "mac": "ctrl+alt+i",
+      "when": "editorTextFocus && resourceExtname == .rb/"
+    }
+  ]
 }
