@@ -214,7 +214,7 @@ export class Ruby {
       );
     }
 
-    this._env.BUNDLE_GEMFILE = absoluteBundlePath;
+    this._env.BUNDLE_GEMFILE = `"${absoluteBundlePath}"`;
   }
 
   private async readRubyVersion() {
