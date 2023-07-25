@@ -83,6 +83,12 @@
         "when": "editorActive && editorLangId == ruby"
       },
       {
+        "command": "rubyLsp.rerunLastTest",
+        "title": "Re-run last test",
+        "category": "Ruby LSP",
+        "when": "editorActive && editorLangId == ruby"
+      },
+      {
         "command": "rubyLsp.showSyntaxTree",
         "title": "Show syntax tree",
         "category": "Ruby LSP"

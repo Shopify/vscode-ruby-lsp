@@ -24,6 +24,7 @@ export enum Command {
   RunTest = "rubyLsp.runTest",
   RunTestInTerminal = "rubyLsp.runTestInTerminal",
   DebugTest = "rubyLsp.debugTest",
+  RerunLastTest = "rubyLsp.rerunLastTest",
   OpenLink = "rubyLsp.openLink",
   ShowSyntaxTree = "rubyLsp.showSyntaxTree",
 }

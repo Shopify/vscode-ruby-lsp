@@ -22,6 +22,9 @@ export class TestController {
   private terminal: vscode.Terminal | undefined;
   private ruby: Ruby;
   private telemetry: Telemetry;
+  // either a testId or a command
+  private lastTest: string | undefined;
+  private lastTestMechanism: "click" | "terminal" | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -79,6 +82,10 @@ export class TestController {
       vscode.commands.registerCommand(
         Command.DebugTest,
         this.debugTest.bind(this),
+      ),
+      vscode.commands.registerCommand(
+        Command.RerunLastTest,
+        this.rerunLastTest.bind(this),
       ),
     );
   }
@@ -150,6 +157,23 @@ export class TestController {
     });
   }
 
+  private async rerunLastTest() {
+    if (!this.lastTest) {
+      return;
+    }
+
+    // TODO: Add telemetry for this?
+
+    switch (this.lastTestMechanism) {
+      case "terminal":
+        this.runTestInTerminal("", "", this.lastTest);
+        break;
+      case "click":
+        this.runOnClick(this.lastTest);
+        break;
+    }
+  }
+
   private async runTestInTerminal(
     _path: string,
     _name: string,
@@ -165,6 +189,8 @@ export class TestController {
     }
 
     this.terminal.show();
+    this.lastTest = command;
+    this.lastTestMechanism = "terminal";
     this.terminal.sendText(command);
   }
 
@@ -276,6 +302,8 @@ export class TestController {
     const testRun = new vscode.TestRunRequest([test], [], this.testRunProfile);
 
     this.testRunProfile.runHandler(testRun, tokenSource.token);
+    this.lastTest = testId;
+    this.lastTestMechanism = "click";
   }
 
   private findTestById(
