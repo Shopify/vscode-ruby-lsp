@@ -21,6 +21,12 @@ jobs:
       - name: 📦 Install dependencies
         run: yarn --frozen-lockfile
 
+      - name: Create CHANGELOG.md
+        run: |
+          RELEASE_NOTES=$(curl -L https://api.github.com/repos/Shopify/vscode-ruby-lsp/releases)
+          CHANGELOG=$(echo "$RELEASE_NOTES" | jq -r '.[] | "# \(.tag_name)", .body')
+          printf "%s\n" "$CHANGELOG" > CHANGELOG.md
+
       # Stable releases
       - name: Publish extension in the marketplace
         if: "!github.event.release.prerelease"
