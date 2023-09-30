@@ -22,10 +22,22 @@ jobs:
         run: yarn --frozen-lockfile
 
       - name: Create CHANGELOG.md
-        run: |
-          RELEASE_NOTES=$(curl -L https://api.github.com/repos/Shopify/vscode-ruby-lsp/releases)
-          CHANGELOG=$(echo "$RELEASE_NOTES" | jq -r '.[] | "# \(.tag_name)", .body')
-          printf "%s\n" "$CHANGELOG" > CHANGELOG.md
+        uses: actions/github-script@v6
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            const fs = require("fs");
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const changelog = releases
+              .map((release) => `# ${release.tag_name}\n${release.body}\n`)
+              .join("\n");
+
+            fs.writeFileSync("CHANGELOG.md", changelog);
 
       # Stable releases
       - name: Publish extension in the marketplace
