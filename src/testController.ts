@@ -72,8 +72,11 @@ export class TestController {
       this.testController,
       vscode.commands.registerCommand(
         Command.RunTest,
-        (_path, name, _command) => {
-          this.runOnClick(name);
+        (_path, _name, _command) => {
+          const line = vscode.window.activeTextEditor!.selection.active.line;
+          vscode.commands.executeCommand("testing.runAtCursor", {
+            lineNumber: line,
+          });
         },
       ),
       vscode.commands.registerCommand(
@@ -290,27 +293,6 @@ export class TestController {
         throw new Error(error.stdout);
       }
     }
-  }
-
-  private runOnClick(testId: string) {
-    const test = this.findTestById(testId);
-
-    if (!test) return;
-
-    vscode.commands.executeCommand("vscode.revealTestInExplorer", test);
-    let tokenSource: vscode.CancellationTokenSource | null =
-      new vscode.CancellationTokenSource();
-
-    tokenSource.token.onCancellationRequested(() => {
-      tokenSource?.dispose();
-      tokenSource = null;
-
-      vscode.window.showInformationMessage("Cancelled the progress");
-    });
-
-    const testRun = new vscode.TestRunRequest([test], [], this.testRunProfile);
-
-    this.testRunProfile.runHandler(testRun, tokenSource.token);
   }
 
   private findTestById(

@@ -267,6 +267,24 @@ Possible values are:
 - `messages`: display requests and responses notifications
 - `verbose`: display each request and response as JSON
 
+### Keybindings
+
+VS Code provides the default keybindings:
+
+| Command                        | Mac                 | Windows/Linux       |
+| ------------------------------ | ------------------- | ------------------- |
+| Test: Run Test At Cursor       | Command-; C         | Control-; C         |
+| Test: Rerun Last Run           | Command-; L         | Control-; L         |
+| Test: Rerun Failed Tests       | Command-; E         | Control-; E         |
+| Test: Run Test In Current File | Command-; F         | Control-; F         |
+| Test: Debug Test At Cursor     | Command-; Command-C | Control-; Control-C |
+
+In addition, the extension provides keybindings for:
+
+| Command                                | Mac           | Windows/Linux |
+| -------------------------------------- | ------------- | ------------- |
+| Ruby LSP: Run Current Test In Terminal | Ctrl-Option-I | Control-Alt-I |
+
 ### Debugging the server using VS Code
 
 The `launch.json` contains a 'Minitest - current file' configuration for the debugger.
