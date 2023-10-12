@@ -394,7 +394,7 @@ export default class Client implements ClientInterface {
         `end`,
         `exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})`,
       ].join("; ");
-      await asyncExec(`ruby -rbundler -e "${script}"`, {
+      await asyncExec(`ruby -rbundler/setup -e "${script}"`, {
         cwd: this.workingFolder,
         env: withoutBundleGemfileEnv,
       });
