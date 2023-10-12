@@ -383,8 +383,8 @@ export default class Client implements ClientInterface {
       // dependency and not our custom bundle
       const { BUNDLE_GEMFILE, ...withoutBundleGemfileEnv } = this.ruby.env;
 
-      // exit with an error if gemName not a dependency or is a transitive dependency.
-      // exit with success if gemName is a direct dependency.
+      // exit with an error if gemNamePattern not a dependency or is a transitive dependency.
+      // exit with success if gemNamePattern is a direct dependency.
 
       // NOTE: If changing this behavior, it's likely that the gem will also need changed.
       const script = [
