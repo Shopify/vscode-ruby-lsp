@@ -377,7 +377,7 @@ export default class Client implements ClientInterface {
     return Object.keys(features).filter((key) => features[key]);
   }
 
-  private async projectHasDependency(gemName: RegExp): Promise<boolean> {
+  private async projectHasDependency(gemNamePattern: RegExp): Promise<boolean> {
     try {
       // We can't include `BUNDLE_GEMFILE` here, because we want to check if the project's bundle includes the
       // dependency and not our custom bundle
@@ -386,13 +386,13 @@ export default class Client implements ClientInterface {
       // exit with an error if gemName not a dependency or is a transitive dependency.
       // exit with success if gemName is a direct dependency.
 
-      // NOTE: If changing this behaviour, it's likely that the gem will also need changed.
+      // NOTE: If changing this behavior, it's likely that the gem will also need changed.
       const script = [
         `gemfile_dependencies = Bundler.locked_gems.dependencies.keys`,
-        `gemspec_dependencies = Dir.glob('{,*}.gemspec').flat_map do |path|`,
-        `  Bundler.load_gemspec(path).dependencies.map(&:name)`,
+        `gemspec_dependencies = Bundler.locked_gems.sources.grep(Bundler::Source::Gemspec).flat_map do`,
+        ` . _1.gemspec&.dependencies&.map(&:name)`,
         `end`,
-        `exit 1 unless (gemfile_dependencies + gemspec_dependencies).grep(${gemName}).any?`,
+        `exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})`,
       ].join("; ");
       await asyncExec(`ruby -rbundler -e "${script}"`, {
         cwd: this.workingFolder,
