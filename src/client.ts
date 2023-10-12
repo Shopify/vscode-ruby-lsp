@@ -390,7 +390,7 @@ export default class Client implements ClientInterface {
       const script = [
         `gemfile_dependencies = Bundler.locked_gems.dependencies.keys`,
         `gemspec_dependencies = Bundler.locked_gems.sources.grep(Bundler::Source::Gemspec).flat_map do`,
-        ` . _1.gemspec&.dependencies&.map(&:name)`,
+        `  _1.gemspec&.dependencies&.map(&:name)`,
         `end`,
         `exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})`,
       ].join("; ");
