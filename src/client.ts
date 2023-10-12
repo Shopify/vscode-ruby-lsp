@@ -387,13 +387,13 @@ export default class Client implements ClientInterface {
       // exit with success if gemNamePattern is a direct dependency.
 
       // NOTE: If changing this behavior, it's likely that the gem will also need changed.
-      const script = [
-        `gemfile_dependencies = Bundler.locked_gems.dependencies.keys`,
-        `gemspec_dependencies = Bundler.locked_gems.sources.grep(Bundler::Source::Gemspec).flat_map do`,
-        `  _1.gemspec&.dependencies&.map(&:name)`,
-        `end`,
-        `exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})`,
-      ].join("; ");
+      const script = `
+        gemfile_dependencies = Bundler.locked_gems.dependencies.keys
+        gemspec_dependencies = Bundler.locked_gems.sources.grep(Bundler::Source::Gemspec).flat_map do
+          _1.gemspec&.dependencies&.map(&:name)
+        end
+        exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})
+      `;
       await asyncExec(`ruby -rbundler/setup -e "${script}"`, {
         cwd: this.workingFolder,
         env: withoutBundleGemfileEnv,
