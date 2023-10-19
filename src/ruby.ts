@@ -242,9 +242,7 @@ export class Ruby {
   }
 
   private readRubyVersion() {
-    let dir = this.customBundleGemfile
-      ? path.dirname(this.customBundleGemfile)
-      : this.workingFolder;
+    let dir = this.cwd;
 
     while (fs.existsSync(dir)) {
       const versionFile = path.join(dir, ".ruby-version");
