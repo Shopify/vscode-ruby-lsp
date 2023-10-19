@@ -229,7 +229,7 @@ export class Debugger
       // actually an error
       this.debugProcess.on("exit", (code) => {
         if (code) {
-          const message = `Debugger exited with status ${code}. Check the output channel for more information`;
+          const message = `Debugger exited with status ${code}. Check the output channel for more information.`;
           this.console.append(message);
           this.outputChannel.show();
           reject(new Error(message));
