@@ -562,9 +562,9 @@ export default class Client implements ClientInterface {
   private executables(): ServerOptions {
     let run: Executable;
     let debug: Executable;
-    const branch: string = vscode.workspace
+    const experimental: boolean = vscode.workspace
       .getConfiguration("rubyLsp")
-      .get("branch")!;
+      .get("enableExperimentalFeatures")!;
 
     const executableOptions: ExecutableOptions = {
       cwd: this.workingFolder,
@@ -589,7 +589,7 @@ export default class Client implements ClientInterface {
     } else {
       run = {
         command: "ruby-lsp",
-        args: branch.length > 0 ? ["--branch", branch] : [],
+        args: experimental ? ["--experimental"] : [],
         options: executableOptions,
       };
 
