@@ -1,11 +1,6 @@
 import path from "path";
 import fs from "fs";
-import {
-  ChildProcessWithoutNullStreams,
-  spawn,
-  execSync,
-  SpawnSyncReturns,
-} from "child_process";
+import { ChildProcessWithoutNullStreams, spawn, execSync } from "child_process";
 
 import * as vscode from "vscode";
 
