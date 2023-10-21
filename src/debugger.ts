@@ -1,6 +1,11 @@
 import path from "path";
 import fs from "fs";
-import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import {
+  ChildProcessWithoutNullStreams,
+  spawn,
+  execSync,
+  SpawnSyncReturns,
+} from "child_process";
 
 import * as vscode from "vscode";
 
@@ -8,9 +13,8 @@ import { Ruby } from "./ruby";
 
 export class Debugger
   implements
-    vscode.DebugAdapterDescriptorFactory,
-    vscode.DebugConfigurationProvider
-{
+  vscode.DebugAdapterDescriptorFactory,
+  vscode.DebugConfigurationProvider {
   private readonly workingFolder: string;
   private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
@@ -121,41 +125,44 @@ export class Debugger
     this.subscriptions.forEach((subscription) => subscription.dispose());
   }
 
+  private getSockets(): string[] {
+    const cmd = "rdbg --util=list-socks";
+    let sockets: string[] = [];
+    try {
+      sockets = execSync(cmd)
+        .toString()
+        .split("\n")
+        .filter((socket) => socket.length > 0);
+    } catch (error: any) {
+      this.console.append(error.message);
+    }
+    return sockets;
+  }
+
   private attachDebuggee(): Promise<vscode.DebugAdapterDescriptor | undefined> {
     // When using attach, a process will be launched using Ruby debug and it will create a socket automatically. We have
     // to find the available sockets and ask the user which one they want to attach to
-    const socketsDir = path.join("/", "tmp", "ruby-lsp-debug-sockets");
-    const sockets = fs
-      .readdirSync(socketsDir)
-      .map((file) => file)
-      .filter((file) => file.endsWith(".sock"));
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     return new Promise((resolve, reject) => {
+      const sockets = this.getSockets();
       if (sockets.length === 0) {
-        reject(
-          new Error(
-            `No debuggee processes found. Was a socket created in ${socketsDir}?`,
-          ),
-        );
-      }
-
-      return vscode.window
-        .showQuickPick(sockets, {
-          placeHolder: "Select a debuggee",
-          ignoreFocusOut: true,
-        })
-        .then((selectedSocket) => {
-          if (selectedSocket === undefined) {
-            reject(new Error("No debuggee selected"));
-          } else {
-            resolve(
-              new vscode.DebugAdapterNamedPipeServer(
-                path.join(socketsDir, selectedSocket),
-              ),
-            );
-          }
-        });
+        reject(new Error(`No debuggee processes found.`));
+      } else if (sockets.length === 1)
+        resolve(new vscode.DebugAdapterNamedPipeServer(sockets[0]));
+      else
+        return vscode.window
+          .showQuickPick(sockets, {
+            placeHolder: "Select a debuggee",
+            ignoreFocusOut: true,
+          })
+          .then((selectedSocket) => {
+            if (selectedSocket === undefined) {
+              reject(new Error("No debuggee selected"));
+            } else {
+              resolve(new vscode.DebugAdapterNamedPipeServer(selectedSocket));
+            }
+          });
     });
   }
 
@@ -173,7 +180,6 @@ export class Debugger
         "rdbg",
         "--open",
         "--command",
-        `--sock-path=${sockPath}`,
         "--",
         configuration.program,
       ];
