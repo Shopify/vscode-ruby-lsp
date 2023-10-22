@@ -166,7 +166,6 @@ export class Debugger
   ): Promise<vscode.DebugAdapterDescriptor | undefined> {
     let initialMessage = "";
     let initialized = false;
-    const sockPath = this.socketPath();
     const configuration = session.configuration;
 
     return new Promise((resolve, reject) => {
@@ -210,7 +209,14 @@ export class Debugger
           initialMessage.includes("DEBUGGER: wait for debugger connection...")
         ) {
           initialized = true;
-          resolve(new vscode.DebugAdapterNamedPipeServer(sockPath));
+          const regex =
+            /DEBUGGER: Debugger can attach via UNIX domain socket \((.*)\)/;
+          const sockPath = RegExp(regex).exec(initialMessage);
+          if (sockPath && sockPath.length === 2) {
+            resolve(new vscode.DebugAdapterNamedPipeServer(sockPath[1]));
+          } else {
+            reject(new Error("Debugger not found on UNIX socket"));
+          }
         }
       });
 
@@ -237,31 +243,5 @@ export class Debugger
         }
       });
     });
-  }
-
-  // Generate a socket path so that Ruby debug doesn't have to create one for us. This makes coordination easier since
-  // we always know the path to the socket
-  private socketPath() {
-    const socketsDir = path.join("/", "tmp", "ruby-lsp-debug-sockets");
-    if (!fs.existsSync(socketsDir)) {
-      fs.mkdirSync(socketsDir);
-    }
-
-    let socketIndex = 0;
-    const prefix = `ruby-debug-${path.basename(this.workingFolder)}`;
-    const existingSockets = fs
-      .readdirSync(socketsDir)
-      .map((file) => file)
-      .filter((file) => file.startsWith(prefix))
-      .sort();
-
-    if (existingSockets.length > 0) {
-      socketIndex =
-        Number(
-          /-(\d+).sock$/.exec(existingSockets[existingSockets.length - 1])![1],
-        ) + 1;
-    }
-
-    return `${socketsDir}/${prefix}-${socketIndex}.sock`;
   }
 }
