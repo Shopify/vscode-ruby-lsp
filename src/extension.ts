@@ -13,7 +13,11 @@ let testController: TestController | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   const outputChannel = vscode.window.createOutputChannel("Ruby LSP");
-  const ruby = new Ruby(context, outputChannel);
+  const ruby = new Ruby(
+    context,
+    outputChannel,
+    vscode.workspace.workspaceFolders![0].uri.fsPath,
+  );
   await ruby.activateRuby();
 
   const telemetry = new Telemetry(context);

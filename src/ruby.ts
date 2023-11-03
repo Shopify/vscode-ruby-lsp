@@ -1,11 +1,9 @@
-import { exec } from "child_process";
-import { promisify } from "util";
 import path from "path";
-import fs from "fs";
+import fs from "fs/promises";
 
 import * as vscode from "vscode";
 
-const asyncExec = promisify(exec);
+import { asyncExec, pathExists } from "./common";
 
 export enum VersionManager {
   Asdf = "asdf",
@@ -36,7 +34,7 @@ export class Ruby {
   constructor(
     context: vscode.ExtensionContext,
     outputChannel: vscode.OutputChannel,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    workingFolder: string,
   ) {
     this.context = context;
     this.workingFolder = workingFolder;
@@ -113,9 +111,9 @@ export class Ruby {
           break;
       }
 
-      await this.fetchRubyInfo();
+      this.fetchRubyVersionInfo();
       this.deleteGcEnvironmentVariables();
-      this.setupBundlePath();
+      await this.setupBundlePath();
       this._error = false;
     } catch (error: any) {
       this._error = true;
@@ -133,7 +131,7 @@ export class Ruby {
   }
 
   private async activateShadowenv() {
-    if (!fs.existsSync(path.join(this.workingFolder, ".shadowenv.d"))) {
+    if (!(await pathExists(path.join(this.workingFolder, ".shadowenv.d")))) {
       throw new Error(
         "The Ruby LSP version manager is configured to be shadowenv, \
         but no .shadowenv.d directory was found in the workspace",
@@ -153,7 +151,7 @@ export class Ruby {
     // If the configurations under `.shadowenv.d/` point to a Ruby version that is not installed, shadowenv will still
     // return the complete environment without throwing any errors. Here, we check to see if the RUBY_ROOT returned by
     // shadowenv exists. If it doens't, then it's likely that the Ruby version configured is not installed
-    if (!fs.existsSync(env.RUBY_ROOT)) {
+    if (!(await pathExists(env.RUBY_ROOT))) {
       throw new Error(
         `The Ruby version configured in .shadowenv.d is ${env.RUBY_VERSION}, \
         but the Ruby installation at ${env.RUBY_ROOT} does not exist`,
@@ -165,16 +163,27 @@ export class Ruby {
     // eslint-disable-next-line no-process-env
     process.env = env;
     this._env = env;
+
+    // Get the Ruby version and YJIT support. Shadowenv is the only manager where this is separate from activation
+    const rubyInfo = await asyncExec(
+      "ruby -e 'STDERR.print(\"#{RUBY_VERSION},#{defined?(RubyVM::YJIT)}\")'",
+      { env: this._env, cwd: this.cwd },
+    );
+
+    const [rubyVersion, yjitIsDefined] = rubyInfo.stderr.trim().split(",");
+    this.rubyVersion = rubyVersion;
+    this.yjitEnabled = yjitIsDefined === "constant";
   }
 
   private async activateChruby() {
-    const rubyVersion = this.readRubyVersion();
+    const rubyVersion = await this.readRubyVersion();
     await this.activate(`chruby "${rubyVersion}" && ruby`);
   }
 
   private async activate(ruby: string) {
     let command = this.shell ? `${this.shell} -ic '` : "";
-    command += `${ruby} -rjson -e "STDERR.printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE}, JSON.dump(ENV.to_h))"`;
+    command += `${ruby} -rjson -e "STDERR.printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE},
+      JSON.dump({ env: ENV.to_h, ruby_version: RUBY_VERSION, yjit: defined?(RubyVM::YJIT) }))"`;
 
     if (this.shell) {
       command += "'";
@@ -185,26 +194,21 @@ export class Ruby {
     );
 
     const result = await asyncExec(command, { cwd: this.cwd });
-
-    const envJson = /RUBY_ENV_ACTIVATE(.*)RUBY_ENV_ACTIVATE/.exec(
+    const rubyInfoJson = /RUBY_ENV_ACTIVATE(.*)RUBY_ENV_ACTIVATE/.exec(
       result.stderr,
     )![1];
 
-    this._env = JSON.parse(envJson);
+    const rubyInfo = JSON.parse(rubyInfoJson);
+
+    this._env = rubyInfo.env;
+    this.rubyVersion = rubyInfo.ruby_version;
+    this.yjitEnabled = rubyInfo.yjit === "constant";
   }
 
-  private async fetchRubyInfo() {
-    const rubyInfo = await asyncExec(
-      "ruby -e 'STDERR.print(\"#{RUBY_VERSION},#{defined?(RubyVM::YJIT)}\")'",
-      { env: this._env, cwd: this.cwd },
-    );
-
-    const [rubyVersion, yjitIsDefined] = rubyInfo.stderr.trim().split(",");
-
-    this.rubyVersion = rubyVersion;
-    this.yjitEnabled = yjitIsDefined === "constant";
-
-    const [major, minor, _patch] = this.rubyVersion.split(".").map(Number);
+  // Fetch information related to the Ruby version. This can only be invoked after activation, so that `rubyVersion` is
+  // set
+  private fetchRubyVersionInfo() {
+    const [major, minor, _patch] = this.rubyVersion!.split(".").map(Number);
 
     if (major < 3) {
       throw new Error(
@@ -237,14 +241,14 @@ export class Ruby {
     });
   }
 
-  private setupBundlePath() {
+  private async setupBundlePath() {
     // Some users like to define a completely separate Gemfile for development tools. We allow them to use
     // `rubyLsp.bundleGemfile` to configure that and need to inject it into the environment
     if (!this.customBundleGemfile) {
       return;
     }
 
-    if (!fs.existsSync(this.customBundleGemfile)) {
+    if (!(await pathExists(this.customBundleGemfile))) {
       throw new Error(
         `The configured bundle gemfile ${this.customBundleGemfile} does not exist`,
       );
@@ -253,14 +257,14 @@ export class Ruby {
     this._env.BUNDLE_GEMFILE = this.customBundleGemfile;
   }
 
-  private readRubyVersion() {
+  private async readRubyVersion() {
     let dir = this.cwd;
 
-    while (fs.existsSync(dir)) {
+    while (await pathExists(dir)) {
       const versionFile = path.join(dir, ".ruby-version");
 
-      if (fs.existsSync(versionFile)) {
-        const version = fs.readFileSync(versionFile, "utf8");
+      if (await pathExists(versionFile)) {
+        const version = await fs.readFile(versionFile, "utf8");
         const trimmedVersion = version.trim();
 
         if (trimmedVersion !== "") {
@@ -285,7 +289,7 @@ export class Ruby {
   private async discoverVersionManager() {
     // For shadowenv, it wouldn't be enough to check for the executable's existence. We need to check if the project has
     // created a .shadowenv.d folder
-    if (fs.existsSync(path.join(this.workingFolder, ".shadowenv.d"))) {
+    if (await pathExists(path.join(this.workingFolder, ".shadowenv.d"))) {
       this.versionManager = VersionManager.Shadowenv;
       return;
     }
@@ -323,7 +327,7 @@ export class Ruby {
         `Ruby LSP> Checking if ${tool} is available on the path with command: ${command}`,
       );
 
-      await asyncExec(command, { cwd: this.workingFolder });
+      await asyncExec(command, { cwd: this.workingFolder, timeout: 1000 });
       return true;
     } catch {
       return false;
