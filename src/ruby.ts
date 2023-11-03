@@ -3,7 +3,7 @@ import fs from "fs/promises";
 
 import * as vscode from "vscode";
 
-import { asyncExec, pathExists } from "./common";
+import { asyncExec, pathExists, LOG_CHANNEL } from "./common";
 
 export enum VersionManager {
   Asdf = "asdf",
@@ -29,16 +29,10 @@ export class Ruby {
   private readonly context: vscode.ExtensionContext;
   private readonly customBundleGemfile?: string;
   private readonly cwd: string;
-  private readonly outputChannel: vscode.OutputChannel;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel,
-    workingFolder: string,
-  ) {
+  constructor(context: vscode.ExtensionContext, workingFolder: string) {
     this.context = context;
     this.workingFolder = workingFolder;
-    this.outputChannel = outputChannel;
 
     const customBundleGemfile: string = vscode.workspace
       .getConfiguration("rubyLsp")
@@ -81,9 +75,7 @@ export class Ruby {
     // If the version manager is auto, discover the actual manager before trying to activate anything
     if (this.versionManager === VersionManager.Auto) {
       await this.discoverVersionManager();
-      this.outputChannel.appendLine(
-        `Ruby LSP> Discovered version manager ${this.versionManager}`,
-      );
+      LOG_CHANNEL.info(`Discovered version manager ${this.versionManager}`);
     }
 
     try {
@@ -189,8 +181,8 @@ export class Ruby {
       command += "'";
     }
 
-    this.outputChannel.appendLine(
-      `Ruby LSP> Trying to activate Ruby environment with command: ${command} inside directory: ${this.cwd}`,
+    LOG_CHANNEL.info(
+      `Trying to activate Ruby environment with command: ${command} inside directory: ${this.cwd}`,
     );
 
     const result = await asyncExec(command, { cwd: this.cwd });
@@ -323,8 +315,8 @@ export class Ruby {
         command += "'";
       }
 
-      this.outputChannel.appendLine(
-        `Ruby LSP> Checking if ${tool} is available on the path with command: ${command}`,
+      LOG_CHANNEL.info(
+        `Checking if ${tool} is available on the path with command: ${command}`,
       );
 
       await asyncExec(command, { cwd: this.workingFolder, timeout: 1000 });
