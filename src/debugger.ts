@@ -8,8 +8,9 @@ import { Ruby } from "./ruby";
 
 export class Debugger
   implements
-  vscode.DebugAdapterDescriptorFactory,
-  vscode.DebugConfigurationProvider {
+    vscode.DebugAdapterDescriptorFactory,
+    vscode.DebugConfigurationProvider
+{
   private readonly workingFolder: string;
   private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
@@ -121,7 +122,7 @@ export class Debugger
   }
 
   private getSockets(): string[] {
-    const cmd = "rdbg --util=list-socks";
+    const cmd = "bundle exec rdbg --util=list-socks";
     let sockets: string[] = [];
     try {
       sockets = execSync(cmd)
