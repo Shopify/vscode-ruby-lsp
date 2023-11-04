@@ -60,7 +60,7 @@ export default class Client implements ClientInterface {
     telemetry: Telemetry,
     ruby: Ruby,
     testController: TestController,
-    workingFolder: string,
+    workingFolder = "",
   ) {
     this.workspaceFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
     if (workingFolder) {
