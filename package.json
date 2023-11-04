@@ -266,6 +266,10 @@
             "both"
           ],
           "default": "both"
+        },
+        "rubyLsp.workingFolder": {
+          "description": "Relative or absolute path to ruby project root",
+          "type": "string"
         }
       }
     },

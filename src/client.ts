@@ -35,7 +35,11 @@ type SyntaxTreeResponse = { ast: string } | null;
 
 export default class Client implements ClientInterface {
   private client: LanguageClient | undefined;
-  private readonly workingFolder: string;
+  private readonly workspaceFolder: string;
+  private readonly workingFolder: string = vscode.workspace
+    .getConfiguration("rubyLsp")
+    .get("workingFolder")!;
+
   private readonly telemetry: Telemetry;
   private readonly statusItems: StatusItems;
   private readonly testController: TestController;
@@ -56,9 +60,18 @@ export default class Client implements ClientInterface {
     telemetry: Telemetry,
     ruby: Ruby,
     testController: TestController,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    workingFolder: string,
   ) {
-    this.workingFolder = workingFolder;
+    this.workspaceFolder = vscode.workspace.workspaceFolders![0].uri.fsPath;
+    if (workingFolder) {
+      this.workingFolder = workingFolder;
+    } else if (this.workingFolder.length > 0) {
+      this.workingFolder = path.isAbsolute(this.workingFolder)
+        ? this.workingFolder
+        : path.resolve(this.workspaceFolder, this.workingFolder);
+    } else {
+      this.workingFolder = this.workspaceFolder;
+    }
     this.baseFolder = path.basename(this.workingFolder);
     this.telemetry = telemetry;
     this.testController = testController;
@@ -495,7 +508,7 @@ export default class Client implements ClientInterface {
   // If the `.git` folder exists and `.git/rebase-merge` or `.git/rebase-apply` exists, then we're in the middle of a
   // rebase
   private rebaseInProgress() {
-    const gitFolder = path.join(this.workingFolder, ".git");
+    const gitFolder = path.join(this.workspaceFolder, ".git");
 
     return (
       fs.existsSync(gitFolder) &&
