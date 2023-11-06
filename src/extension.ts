@@ -12,10 +12,7 @@ let debug: Debugger | undefined;
 let testController: TestController | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const ruby = new Ruby(
-    context,
-    vscode.workspace.workspaceFolders![0].uri.fsPath,
-  );
+  const ruby = new Ruby(context, vscode.workspace.workspaceFolders![0]);
   await ruby.activateRuby();
 
   const telemetry = new Telemetry(context);

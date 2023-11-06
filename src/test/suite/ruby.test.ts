@@ -21,7 +21,9 @@ suite("Ruby environment activation", () => {
       extensionMode: vscode.ExtensionMode.Test,
     } as vscode.ExtensionContext;
 
-    ruby = new Ruby(context, tmpPath);
+    ruby = new Ruby(context, {
+      uri: { fsPath: tmpPath },
+    } as vscode.WorkspaceFolder);
     await ruby.activateRuby(
       // eslint-disable-next-line no-process-env
       process.env.CI ? VersionManager.None : VersionManager.Chruby,

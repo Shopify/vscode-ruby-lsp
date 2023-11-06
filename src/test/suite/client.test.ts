@@ -66,7 +66,9 @@ suite("Client", () => {
       },
     } as unknown as vscode.ExtensionContext;
 
-    const ruby = new Ruby(context, tmpPath);
+    const ruby = new Ruby(context, {
+      uri: { fsPath: tmpPath },
+    } as vscode.WorkspaceFolder);
     await ruby.activateRuby();
 
     const telemetry = new Telemetry(context, new FakeApi());

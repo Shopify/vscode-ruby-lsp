@@ -20,7 +20,7 @@ export class Ruby {
   public rubyVersion?: string;
   public yjitEnabled?: boolean;
   public supportsYjit?: boolean;
-  private readonly workingFolder: string;
+  private readonly workingFolderPath: string;
   #versionManager?: VersionManager;
   // eslint-disable-next-line no-process-env
   private readonly shell = process.env.SHELL;
@@ -30,9 +30,12 @@ export class Ruby {
   private readonly customBundleGemfile?: string;
   private readonly cwd: string;
 
-  constructor(context: vscode.ExtensionContext, workingFolder: string) {
+  constructor(
+    context: vscode.ExtensionContext,
+    workingFolder: vscode.WorkspaceFolder,
+  ) {
     this.context = context;
-    this.workingFolder = workingFolder;
+    this.workingFolderPath = workingFolder.uri.fsPath;
 
     const customBundleGemfile: string = vscode.workspace
       .getConfiguration("rubyLsp")
@@ -41,12 +44,12 @@ export class Ruby {
     if (customBundleGemfile.length > 0) {
       this.customBundleGemfile = path.isAbsolute(customBundleGemfile)
         ? customBundleGemfile
-        : path.resolve(path.join(this.workingFolder, customBundleGemfile));
+        : path.resolve(path.join(this.workingFolderPath, customBundleGemfile));
     }
 
     this.cwd = this.customBundleGemfile
       ? path.dirname(this.customBundleGemfile)
-      : this.workingFolder;
+      : this.workingFolderPath;
   }
 
   get versionManager() {
@@ -123,7 +126,9 @@ export class Ruby {
   }
 
   private async activateShadowenv() {
-    if (!(await pathExists(path.join(this.workingFolder, ".shadowenv.d")))) {
+    if (
+      !(await pathExists(path.join(this.workingFolderPath, ".shadowenv.d")))
+    ) {
       throw new Error(
         "The Ruby LSP version manager is configured to be shadowenv, \
         but no .shadowenv.d directory was found in the workspace",
@@ -142,7 +147,7 @@ export class Ruby {
 
     // If the configurations under `.shadowenv.d/` point to a Ruby version that is not installed, shadowenv will still
     // return the complete environment without throwing any errors. Here, we check to see if the RUBY_ROOT returned by
-    // shadowenv exists. If it doens't, then it's likely that the Ruby version configured is not installed
+    // shadowenv exists. If it doesn't, then it's likely that the Ruby version configured is not installed
     if (!(await pathExists(env.RUBY_ROOT))) {
       throw new Error(
         `The Ruby version configured in .shadowenv.d is ${env.RUBY_VERSION}, \
@@ -281,7 +286,7 @@ export class Ruby {
   private async discoverVersionManager() {
     // For shadowenv, it wouldn't be enough to check for the executable's existence. We need to check if the project has
     // created a .shadowenv.d folder
-    if (await pathExists(path.join(this.workingFolder, ".shadowenv.d"))) {
+    if (await pathExists(path.join(this.workingFolderPath, ".shadowenv.d"))) {
       this.versionManager = VersionManager.Shadowenv;
       return;
     }
@@ -319,7 +324,7 @@ export class Ruby {
         `Checking if ${tool} is available on the path with command: ${command}`,
       );
 
-      await asyncExec(command, { cwd: this.workingFolder, timeout: 1000 });
+      await asyncExec(command, { cwd: this.workingFolderPath, timeout: 1000 });
       return true;
     } catch {
       return false;
