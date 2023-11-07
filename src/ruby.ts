@@ -4,7 +4,7 @@ import os from "os";
 
 import * as vscode from "vscode";
 
-import { asyncExec, pathExists, LOG_CHANNEL } from "./common";
+import { asyncExec, pathExists, LOG_CHANNEL, RubyInterface } from "./common";
 
 export enum VersionManager {
   Asdf = "asdf",
@@ -17,7 +17,7 @@ export enum VersionManager {
   Custom = "custom",
 }
 
-export class Ruby {
+export class Ruby implements RubyInterface {
   public rubyVersion?: string;
   public yjitEnabled?: boolean;
   public supportsYjit?: boolean;
