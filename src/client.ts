@@ -1,7 +1,5 @@
 import path from "path";
 import fs from "fs";
-import { promisify } from "util";
-import { exec } from "child_process";
 import { performance as Perf } from "perf_hooks";
 
 import * as vscode from "vscode";
@@ -14,41 +12,103 @@ import {
   Range,
   ExecutableOptions,
   ServerOptions,
-  DiagnosticPullOptions,
   MessageSignature,
+  State,
 } from "vscode-languageclient/node";
 
+import { asyncExec, LOG_CHANNEL, LSP_NAME } from "./common";
 import { Telemetry, RequestEvent } from "./telemetry";
 import { Ruby } from "./ruby";
-import { StatusItems, Command, ServerState, ClientInterface } from "./status";
+import { ClientInterface } from "./status";
 import { TestController } from "./testController";
-import { LOG_CHANNEL } from "./common";
-
-const LSP_NAME = "Ruby LSP";
-const asyncExec = promisify(exec);
 
 interface EnabledFeatures {
   [key: string]: boolean;
 }
 
-type SyntaxTreeResponse = { ast: string } | null;
-
-export default class Client implements ClientInterface {
-  private client: LanguageClient | undefined;
-  private readonly workingFolder: string;
-  private readonly telemetry: Telemetry;
-  private readonly statusItems: StatusItems;
-  private readonly testController: TestController;
-  private readonly customBundleGemfile: string = vscode.workspace
+// Get the executables to start the server based on the user's configuration
+function lspExecutables(cwd: string, env: NodeJS.ProcessEnv): ServerOptions {
+  let run: Executable;
+  let debug: Executable;
+  const branch: string = vscode.workspace
+    .getConfiguration("rubyLsp")
+    .get("branch")!;
+  const customBundleGemfile: string = vscode.workspace
     .getConfiguration("rubyLsp")
     .get("bundleGemfile")!;
 
+  const executableOptions: ExecutableOptions = { cwd, env, shell: true };
+
+  // If there's a user defined custom bundle, we run the LSP with `bundle exec` and just trust the user configured
+  // their bundle. Otherwise, we run the global install of the LSP and use our custom bundle logic in the server
+  if (customBundleGemfile.length > 0) {
+    run = {
+      command: "bundle",
+      args: ["exec", "ruby-lsp"],
+      options: executableOptions,
+    };
+
+    debug = {
+      command: "bundle",
+      args: ["exec", "ruby-lsp", "--debug"],
+      options: executableOptions,
+    };
+  } else {
+    run = {
+      command: "ruby-lsp",
+      args: branch.length > 0 ? ["--branch", branch] : [],
+      options: executableOptions,
+    };
+
+    debug = {
+      command: "ruby-lsp",
+      args: ["--debug"],
+      options: executableOptions,
+    };
+  }
+
+  return { run, debug };
+}
+
+function clientOptions(
+  configuration: vscode.WorkspaceConfiguration,
+): LanguageClientOptions {
+  const pullOn: "change" | "save" | "both" =
+    configuration.get("pullDiagnosticsOn")!;
+
+  const diagnosticPullOptions = {
+    onChange: pullOn === "change" || pullOn === "both",
+    onSave: pullOn === "save" || pullOn === "both",
+  };
+
+  const features: EnabledFeatures = configuration.get("enabledFeatures")!;
+  const enabledFeatures = Object.keys(features).filter((key) => features[key]);
+
+  return {
+    documentSelector: [{ language: "ruby" }],
+    diagnosticCollectionName: LSP_NAME,
+    outputChannel: LOG_CHANNEL,
+    revealOutputChannelOn: RevealOutputChannelOn.Never,
+    diagnosticPullOptions,
+    initializationOptions: {
+      enabledFeatures,
+      experimentalFeaturesEnabled: configuration.get(
+        "enableExperimentalFeatures",
+      ),
+      formatter: configuration.get("formatter"),
+    },
+  };
+}
+
+export default class Client extends LanguageClient implements ClientInterface {
+  public readonly ruby: Ruby;
+  private readonly workingDirectory: string;
+  private readonly telemetry: Telemetry;
+  private readonly testController: TestController;
   private readonly baseFolder;
   private requestId = 0;
 
   #context: vscode.ExtensionContext;
-  #ruby: Ruby;
-  #state: ServerState = ServerState.Starting;
   #formatter: string;
 
   constructor(
@@ -56,234 +116,49 @@ export default class Client implements ClientInterface {
     telemetry: Telemetry,
     ruby: Ruby,
     testController: TestController,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    workingFolder: string,
   ) {
-    this.workingFolder = workingFolder;
-    this.baseFolder = path.basename(this.workingFolder);
+    super(
+      LSP_NAME,
+      lspExecutables(workingFolder, ruby.env),
+      clientOptions(vscode.workspace.getConfiguration("rubyLsp")),
+    );
+
+    // Middleware are part of client options, but because they must reference `this`, we cannot make it a part of the
+    // `super` call (TypeScript does not allow accessing `this` before invoking `super`)
+    this.registerMiddleware();
+
+    this.workingDirectory = workingFolder;
+    this.baseFolder = path.basename(this.workingDirectory);
     this.telemetry = telemetry;
     this.testController = testController;
     this.#context = context;
-    this.#ruby = ruby;
+    this.ruby = ruby;
     this.#formatter = "";
-    this.statusItems = new StatusItems(this);
-    this.registerCommands();
-    this.registerAutoRestarts();
   }
 
-  async start() {
-    if (this.ruby.error) {
-      this.state = ServerState.Error;
-      return;
-    }
-
-    try {
-      fs.accessSync(this.workingFolder, fs.constants.W_OK);
-    } catch (error: any) {
-      this.state = ServerState.Error;
-
-      vscode.window.showErrorMessage(
-        `Directory ${this.workingFolder} is not writable. The Ruby LSP server needs to be able to create a .ruby-lsp
-        directory to function appropriately. Consider switching to a directory for which VS Code has write permissions`,
-      );
-
-      return;
-    }
-
-    this.state = ServerState.Starting;
-
-    try {
-      await this.installOrUpdateServer();
-    } catch (error: any) {
-      this.state = ServerState.Error;
-
-      // The progress dialog can't be closed by the user, so we have to guarantee that we catch errors
-      vscode.window.showErrorMessage(
-        `Failed to setup the bundle: ${error.message}. \
-            See [Troubleshooting](https://github.com/Shopify/vscode-ruby-lsp#troubleshooting) for instructions`,
-      );
-
-      return;
-    }
-
-    const configuration = vscode.workspace.getConfiguration("rubyLsp");
-    const clientOptions: LanguageClientOptions = {
-      documentSelector: [{ language: "ruby" }],
-      diagnosticCollectionName: LSP_NAME,
-      outputChannel: LOG_CHANNEL,
-      revealOutputChannelOn: RevealOutputChannelOn.Never,
-      diagnosticPullOptions: this.diagnosticPullOptions(),
-      initializationOptions: {
-        enabledFeatures: this.listOfEnabledFeatures(),
-        experimentalFeaturesEnabled: configuration.get(
-          "enableExperimentalFeatures",
-        ),
-        formatter: configuration.get("formatter"),
-      },
-      middleware: {
-        provideCodeLenses: async (document, token, next) => {
-          if (!this.client) {
-            return null;
-          }
-
-          const response = await next(document, token);
-
-          if (response) {
-            const testLenses = response.filter(
-              (codeLens) => (codeLens as CodeLens).data.type === "test",
-            ) as CodeLens[];
-
-            if (testLenses.length) {
-              this.testController.createTestItems(testLenses);
-            }
-          }
-
-          return response;
-        },
-        provideOnTypeFormattingEdits: async (
-          document,
-          position,
-          ch,
-          options,
-          token,
-          _next,
-        ) => {
-          if (this.client) {
-            const response: vscode.TextEdit[] | null =
-              await this.client.sendRequest(
-                "textDocument/onTypeFormatting",
-                {
-                  textDocument: { uri: document.uri.toString() },
-                  position,
-                  ch,
-                  options,
-                },
-                token,
-              );
-
-            if (!response) {
-              return null;
-            }
-
-            // Find the $0 anchor to move the cursor
-            const cursorPosition = response.find(
-              (edit) => edit.newText === "$0",
-            );
-
-            if (!cursorPosition) {
-              return response;
-            }
-
-            // Remove the edit including the $0 anchor
-            response.splice(response.indexOf(cursorPosition), 1);
-
-            const workspaceEdit = new vscode.WorkspaceEdit();
-            workspaceEdit.set(document.uri, response);
-            await vscode.workspace.applyEdit(workspaceEdit);
-
-            await vscode.window.activeTextEditor!.insertSnippet(
-              new vscode.SnippetString(cursorPosition.newText),
-              new vscode.Selection(
-                cursorPosition.range.start,
-                cursorPosition.range.end,
-              ),
-            );
-
-            return null;
-          }
-
-          return undefined;
-        },
-        sendRequest: async <TP, T>(
-          type: string | MessageSignature,
-          param: TP | undefined,
-          token: vscode.CancellationToken,
-          next: (
-            type: string | MessageSignature,
-            param?: TP,
-            token?: vscode.CancellationToken,
-          ) => Promise<T>,
-        ) => {
-          return this.benchmarkMiddleware(type, param, () =>
-            next(type, param, token),
-          );
-        },
-        sendNotification: async <TR>(
-          type: string | MessageSignature,
-          next: (type: string | MessageSignature, params?: TR) => Promise<void>,
-          params: TR,
-        ) => {
-          return this.benchmarkMiddleware(type, params, () =>
-            next(type, params),
-          );
-        },
-      },
-    };
-
-    this.client = new LanguageClient(
-      LSP_NAME,
-      this.executables(),
-      clientOptions,
-    );
-
-    try {
-      await this.client.start();
-    } catch (error: any) {
-      this.state = ServerState.Error;
-      LOG_CHANNEL.error(`Error restarting the server: ${error.message}`);
-      return;
-    }
-
-    // We cannot inquire anything related to the bundle before the custom bundle logic in the server runs
+  // Perform tasks that can only happen once the custom bundle logic from the server is finalized and the client is
+  // already running
+  async performAfterStart() {
     await this.determineFormatter();
     this.telemetry.serverVersion = await this.getServerVersion();
-
-    this.state = ServerState.Running;
-  }
-
-  async stop(): Promise<void> {
-    if (this.client) {
-      await this.client.stop();
-      this.state = ServerState.Stopped;
-    }
   }
 
   async restart() {
-    // If the server is already starting/restarting we should try to do it again. One scenario where that may happen is
-    // when doing git pull, which may trigger a restart for two watchers: .rubocop.yml and Gemfile.lock. In those cases,
-    // we only want to restart once and not twice to avoid leading to a duplicate process
-    if (this.state === ServerState.Starting) {
-      return;
-    }
-
     if (this.rebaseInProgress()) {
       return;
     }
 
     try {
-      this.state = ServerState.Starting;
-
-      if (this.client?.isRunning()) {
+      if (this.state === State.Running) {
         await this.stop();
         await this.start();
       } else {
         await this.start();
       }
     } catch (error: any) {
-      this.state = ServerState.Error;
       LOG_CHANNEL.error(`Error restarting the server: ${error.message}`);
     }
-  }
-
-  dispose() {
-    this.client?.dispose();
-  }
-
-  get ruby(): Ruby {
-    return this.#ruby;
-  }
-
-  private set ruby(ruby: Ruby) {
-    this.#ruby = ruby;
   }
 
   get formatter(): string {
@@ -319,70 +194,14 @@ export default class Client implements ClientInterface {
     this.#context = context;
   }
 
-  get state(): ServerState {
-    return this.#state;
-  }
-
-  private set state(state: ServerState) {
-    this.#state = state;
-    this.statusItems.refresh();
-  }
-
-  private registerCommands() {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(Command.Start, this.start.bind(this)),
-      vscode.commands.registerCommand(Command.Restart, this.restart.bind(this)),
-      vscode.commands.registerCommand(Command.Stop, this.stop.bind(this)),
-      vscode.commands.registerCommand(
-        Command.Update,
-        this.installOrUpdateServer.bind(this),
-      ),
-      vscode.commands.registerCommand(
-        Command.OpenLink,
-        this.openLink.bind(this),
-      ),
-      vscode.commands.registerCommand(
-        Command.ShowSyntaxTree,
-        this.showSyntaxTree.bind(this),
-      ),
-    );
-  }
-
-  private registerAutoRestarts() {
-    this.createRestartWatcher("Gemfile.lock");
-    this.createRestartWatcher("gems.locked");
-    this.createRestartWatcher("**/.rubocop.yml");
-
-    // If a configuration that affects the Ruby LSP has changed, update the client options using the latest
-    // configuration and restart the server
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("rubyLsp")) {
-        // Re-activate Ruby if the version manager changed
-        if (event.affectsConfiguration("rubyLsp.rubyVersionManager")) {
-          await this.ruby.activateRuby();
-        }
-
-        await this.restart();
-      }
+  async sendShowSyntaxTreeRequest(
+    uri: vscode.Uri,
+    range?: Range,
+  ): Promise<{ ast: string } | null> {
+    return this.sendRequest("rubyLsp/textDocument/showSyntaxTree", {
+      textDocument: { uri: uri.toString() },
+      range,
     });
-  }
-
-  private createRestartWatcher(pattern: string) {
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(this.workingFolder, pattern),
-    );
-    this.context.subscriptions.push(watcher);
-
-    watcher.onDidChange(this.restart.bind(this));
-    watcher.onDidCreate(this.restart.bind(this));
-    watcher.onDidDelete(this.restart.bind(this));
-  }
-
-  private listOfEnabledFeatures(): string[] {
-    const configuration = vscode.workspace.getConfiguration("rubyLsp");
-    const features: EnabledFeatures = configuration.get("enabledFeatures")!;
-
-    return Object.keys(features).filter((key) => features[key]);
   }
 
   private async projectHasDependency(gemNamePattern: RegExp): Promise<boolean> {
@@ -403,7 +222,7 @@ export default class Client implements ClientInterface {
         exit 1 unless (gemfile_dependencies + gemspec_dependencies).any?(${gemNamePattern})
       `;
       await asyncExec(`ruby -rbundler/setup -e "${script}"`, {
-        cwd: this.workingFolder,
+        cwd: this.workingDirectory,
         env: withoutBundleGemfileEnv,
       });
       return true;
@@ -412,79 +231,37 @@ export default class Client implements ClientInterface {
     }
   }
 
-  private async installOrUpdateServer(): Promise<void> {
-    // If there's a user configured custom bundle to run the LSP, then we do not perform auto-updates and let the user
-    // manage that custom bundle themselves
-    if (this.hasUserDefinedCustomBundle()) {
-      return;
-    }
-
-    const oneDayInMs = 24 * 60 * 60 * 1000;
-    const lastUpdatedAt: number | undefined = this.context.workspaceState.get(
-      "rubyLsp.lastGemUpdate",
-    );
-
-    const { stderr } = await asyncExec("gem list ruby-lsp 1>&2", {
-      cwd: this.workingFolder,
-      env: this.ruby.env,
-    });
-
-    // If the gem is not yet installed, install it
-    if (!stderr.includes("ruby-lsp")) {
-      await asyncExec("gem install ruby-lsp", {
-        cwd: this.workingFolder,
-        env: this.ruby.env,
-      });
-
-      this.context.workspaceState.update("rubyLsp.lastGemUpdate", Date.now());
-      return;
-    }
-
-    // If we haven't updated the gem in the last 24 hours, update it
-    if (
-      lastUpdatedAt === undefined ||
-      Date.now() - lastUpdatedAt > oneDayInMs
-    ) {
-      try {
-        await asyncExec("gem update ruby-lsp", {
-          cwd: this.workingFolder,
-          env: this.ruby.env,
-        });
-        this.context.workspaceState.update("rubyLsp.lastGemUpdate", Date.now());
-      } catch (error) {
-        // If we fail to update the global installation of `ruby-lsp`, we don't want to prevent the server from starting
-        LOG_CHANNEL.error(`Failed to update global ruby-lsp gem: ${error}`);
-      }
-    }
-  }
-
   private async getServerVersion(): Promise<string> {
+    const customBundle: string = vscode.workspace
+      .getConfiguration("rubyLsp")
+      .get("bundleGemfile")!;
+
     let bundleGemfile;
 
     // If a custom Gemfile was configured outside of the project, use that. Otherwise, prefer our custom bundle over the
     // app's bundle
-    if (this.hasUserDefinedCustomBundle()) {
-      bundleGemfile = path.isAbsolute(this.customBundleGemfile)
-        ? this.customBundleGemfile
-        : path.resolve(path.join(this.workingFolder, this.customBundleGemfile));
+    if (customBundle.length > 0) {
+      bundleGemfile = path.isAbsolute(customBundle)
+        ? customBundle
+        : path.resolve(path.join(this.workingDirectory, customBundle));
     } else if (
-      fs.existsSync(path.join(this.workingFolder, ".ruby-lsp", "Gemfile"))
+      fs.existsSync(path.join(this.workingDirectory, ".ruby-lsp", "Gemfile"))
     ) {
-      bundleGemfile = path.join(this.workingFolder, ".ruby-lsp", "Gemfile");
+      bundleGemfile = path.join(this.workingDirectory, ".ruby-lsp", "Gemfile");
     } else if (
-      fs.existsSync(path.join(this.workingFolder, ".ruby-lsp", "gems.rb"))
+      fs.existsSync(path.join(this.workingDirectory, ".ruby-lsp", "gems.rb"))
     ) {
-      bundleGemfile = path.join(this.workingFolder, ".ruby-lsp", "gems.rb");
-    } else if (fs.existsSync(path.join(this.workingFolder, "gems.rb"))) {
-      bundleGemfile = path.join(this.workingFolder, "gems.rb");
+      bundleGemfile = path.join(this.workingDirectory, ".ruby-lsp", "gems.rb");
+    } else if (fs.existsSync(path.join(this.workingDirectory, "gems.rb"))) {
+      bundleGemfile = path.join(this.workingDirectory, "gems.rb");
     } else {
-      bundleGemfile = path.join(this.workingFolder, "Gemfile");
+      bundleGemfile = path.join(this.workingDirectory, "Gemfile");
     }
 
     const result = await asyncExec(
       `bundle exec ruby -e "require 'ruby-lsp'; STDERR.print(RubyLsp::VERSION)"`,
       {
-        cwd: this.workingFolder,
+        cwd: this.workingDirectory,
         env: { ...this.ruby.env, BUNDLE_GEMFILE: bundleGemfile },
       },
     );
@@ -495,137 +272,13 @@ export default class Client implements ClientInterface {
   // If the `.git` folder exists and `.git/rebase-merge` or `.git/rebase-apply` exists, then we're in the middle of a
   // rebase
   private rebaseInProgress() {
-    const gitFolder = path.join(this.workingFolder, ".git");
+    const gitFolder = path.join(this.workingDirectory, ".git");
 
     return (
       fs.existsSync(gitFolder) &&
       (fs.existsSync(path.join(gitFolder, "rebase-merge")) ||
         fs.existsSync(path.join(gitFolder, "rebase-apply")))
     );
-  }
-
-  private async openLink(link: string) {
-    await this.telemetry.sendCodeLensEvent("link");
-    vscode.env.openExternal(vscode.Uri.parse(link));
-  }
-
-  private async showSyntaxTree() {
-    const activeEditor = vscode.window.activeTextEditor;
-
-    if (this.client && activeEditor) {
-      const document = activeEditor.document;
-
-      if (document.languageId !== "ruby") {
-        vscode.window.showErrorMessage("Show syntax tree: not a Ruby file");
-        return;
-      }
-
-      const selection = activeEditor.selection;
-      let range: Range | undefined;
-
-      // Anchor is the first point and active is the last point in the selection. If both are the same, nothing is
-      // selected
-      if (!selection.active.isEqual(selection.anchor)) {
-        // If you start selecting from below and go up, then the selection is reverted
-        if (selection.isReversed) {
-          range = Range.create(
-            selection.active.line,
-            selection.active.character,
-            selection.anchor.line,
-            selection.anchor.character,
-          );
-        } else {
-          range = Range.create(
-            selection.anchor.line,
-            selection.anchor.character,
-            selection.active.line,
-            selection.active.character,
-          );
-        }
-      }
-
-      const response: SyntaxTreeResponse = await this.client.sendRequest(
-        "rubyLsp/textDocument/showSyntaxTree",
-        {
-          textDocument: { uri: activeEditor.document.uri.toString() },
-          range,
-        },
-      );
-
-      if (response) {
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.from({
-            scheme: "ruby-lsp",
-            path: "show-syntax-tree",
-            query: response.ast,
-          }),
-        );
-
-        await vscode.window.showTextDocument(document, {
-          viewColumn: vscode.ViewColumn.Beside,
-          preserveFocus: true,
-        });
-      }
-    }
-  }
-
-  private executables(): ServerOptions {
-    let run: Executable;
-    let debug: Executable;
-    const branch: string = vscode.workspace
-      .getConfiguration("rubyLsp")
-      .get("branch")!;
-
-    const executableOptions: ExecutableOptions = {
-      cwd: this.workingFolder,
-      env: this.ruby.env,
-      shell: true,
-    };
-
-    // If there's a user defined custom bundle, we run the LSP with `bundle exec` and just trust the user configured
-    // their bundle. Otherwise, we run the global install of the LSP and use our custom bundle logic in the server
-    if (this.hasUserDefinedCustomBundle()) {
-      run = {
-        command: "bundle",
-        args: ["exec", "ruby-lsp"],
-        options: executableOptions,
-      };
-
-      debug = {
-        command: "bundle",
-        args: ["exec", "ruby-lsp", "--debug"],
-        options: executableOptions,
-      };
-    } else {
-      run = {
-        command: "ruby-lsp",
-        args: branch.length > 0 ? ["--branch", branch] : [],
-        options: executableOptions,
-      };
-
-      debug = {
-        command: "ruby-lsp",
-        args: ["--debug"],
-        options: executableOptions,
-      };
-    }
-
-    return { run, debug };
-  }
-
-  private hasUserDefinedCustomBundle(): boolean {
-    return this.customBundleGemfile.length > 0;
-  }
-
-  private diagnosticPullOptions(): DiagnosticPullOptions {
-    const configuration = vscode.workspace.getConfiguration("rubyLsp");
-    const pullOn: "change" | "save" | "both" =
-      configuration.get("pullDiagnosticsOn")!;
-
-    return {
-      onChange: pullOn === "change" || pullOn === "both",
-      onSave: pullOn === "save" || pullOn === "both",
-    };
   }
 
   private async benchmarkMiddleware<T>(
@@ -717,5 +370,94 @@ export default class Client implements ClientInterface {
     }
 
     return result!;
+  }
+
+  // Register the middleware in the client options
+  private registerMiddleware() {
+    this.clientOptions.middleware = {
+      provideCodeLenses: async (document, token, next) => {
+        const response = await next(document, token);
+
+        if (response) {
+          const testLenses = response.filter(
+            (codeLens) => (codeLens as CodeLens).data.type === "test",
+          ) as CodeLens[];
+
+          if (testLenses.length) {
+            this.testController.createTestItems(testLenses);
+          }
+        }
+
+        return response;
+      },
+      provideOnTypeFormattingEdits: async (
+        document,
+        position,
+        ch,
+        options,
+        token,
+        _next,
+      ) => {
+        const response: vscode.TextEdit[] | null = await this.sendRequest(
+          "textDocument/onTypeFormatting",
+          {
+            textDocument: { uri: document.uri.toString() },
+            position,
+            ch,
+            options,
+          },
+          token,
+        );
+
+        if (!response) {
+          return null;
+        }
+
+        // Find the $0 anchor to move the cursor
+        const cursorPosition = response.find((edit) => edit.newText === "$0");
+
+        if (!cursorPosition) {
+          return response;
+        }
+
+        // Remove the edit including the $0 anchor
+        response.splice(response.indexOf(cursorPosition), 1);
+
+        const workspaceEdit = new vscode.WorkspaceEdit();
+        workspaceEdit.set(document.uri, response);
+        await vscode.workspace.applyEdit(workspaceEdit);
+
+        await vscode.window.activeTextEditor!.insertSnippet(
+          new vscode.SnippetString(cursorPosition.newText),
+          new vscode.Selection(
+            cursorPosition.range.start,
+            cursorPosition.range.end,
+          ),
+        );
+
+        return null;
+      },
+      sendRequest: async <TP, T>(
+        type: string | MessageSignature,
+        param: TP | undefined,
+        token: vscode.CancellationToken,
+        next: (
+          type: string | MessageSignature,
+          param?: TP,
+          token?: vscode.CancellationToken,
+        ) => Promise<T>,
+      ) => {
+        return this.benchmarkMiddleware(type, param, () =>
+          next(type, param, token),
+        );
+      },
+      sendNotification: async <TR>(
+        type: string | MessageSignature,
+        next: (type: string | MessageSignature, params?: TR) => Promise<void>,
+        params: TR,
+      ) => {
+        return this.benchmarkMiddleware(type, params, () => next(type, params));
+      },
+    };
   }
 }
