@@ -33,12 +33,13 @@ export class RubyLsp {
       this.workspaces.set(workspaceFolder.uri.toString(), workspace);
 
       await workspace.start();
-      this.context.subscriptions.push(workspace);
     }
 
-    vscode.workspace.registerTextDocumentContentProvider(
-      "ruby-lsp",
-      new DocumentProvider(),
+    this.context.subscriptions.push(
+      vscode.workspace.registerTextDocumentContentProvider(
+        "ruby-lsp",
+        new DocumentProvider(),
+      ),
     );
   }
 

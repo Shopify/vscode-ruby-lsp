@@ -16,21 +16,19 @@ export class Debugger
   private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
-  private readonly subscriptions: vscode.Disposable[];
 
   constructor(
     context: vscode.ExtensionContext,
     ruby: Ruby,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    workspaceFolder: vscode.WorkspaceFolder,
   ) {
     this.ruby = ruby;
-    this.subscriptions = [
+    this.workingFolder = workspaceFolder.uri.fsPath;
+
+    context.subscriptions.push(
       vscode.debug.registerDebugConfigurationProvider("ruby_lsp", this),
       vscode.debug.registerDebugAdapterDescriptorFactory("ruby_lsp", this),
-    ];
-    this.workingFolder = workingFolder;
-
-    context.subscriptions.push(...this.subscriptions);
+    );
   }
 
   // This is where we start the debuggee process. We currently support launching with the debugger or attaching to a
@@ -116,12 +114,12 @@ export class Debugger
     return debugConfiguration;
   }
 
+  // If the extension is deactivating, we need to ensure the debug process is terminated or else it may continue running
+  // in the background
   dispose() {
     if (this.debugProcess) {
       this.debugProcess.kill("SIGTERM");
     }
-
-    this.subscriptions.forEach((subscription) => subscription.dispose());
   }
 
   private attachDebuggee(): Promise<vscode.DebugAdapterDescriptor | undefined> {

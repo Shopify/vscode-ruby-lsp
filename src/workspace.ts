@@ -36,6 +36,8 @@ export class Workspace {
 
     this.debug = new Debugger(context, this.ruby, workspaceFolder);
     this.registerRestarts(context);
+
+    context.subscriptions.push(this.debug);
   }
 
   async start() {
@@ -104,11 +106,6 @@ export class Workspace {
 
   async restart() {
     await this.lspClient?.restart();
-  }
-
-  dispose() {
-    this.debug.dispose();
-    this.testController.dispose();
   }
 
   // Install or update the `ruby-lsp` gem globally with `gem install ruby-lsp` or `gem update ruby-lsp`. We only try to

@@ -5,8 +5,8 @@ import * as vscode from "vscode";
 import { CodeLens } from "vscode-languageclient/node";
 
 import { Ruby } from "./ruby";
-import { Command } from "./status";
 import { Telemetry } from "./telemetry";
+import { Command } from "./common";
 
 const asyncExec = promisify(exec);
 
@@ -29,11 +29,11 @@ export class TestController {
 
   constructor(
     context: vscode.ExtensionContext,
-    workingFolder: string,
+    workspaceFolder: vscode.WorkspaceFolder,
     ruby: Ruby,
     telemetry: Telemetry,
   ) {
-    this.workingFolder = workingFolder;
+    this.workingFolder = workspaceFolder.uri.fsPath;
     this.ruby = ruby;
     this.telemetry = telemetry;
 
@@ -70,6 +70,8 @@ export class TestController {
 
     context.subscriptions.push(
       this.testController,
+      this.testDebugProfile,
+      this.testRunProfile,
       vscode.commands.registerCommand(
         Command.RunTest,
         (_path, name, _command) => {
@@ -133,12 +135,6 @@ export class TestController {
         this.testController.items.add(testItem);
       }
     });
-  }
-
-  dispose() {
-    this.testRunProfile.dispose();
-    this.testDebugProfile.dispose();
-    this.testController.dispose();
   }
 
   private debugTest(_path: string, _name: string, command?: string) {
