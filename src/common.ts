@@ -4,8 +4,27 @@ import { promisify } from "util";
 
 import * as vscode from "vscode";
 
+export enum Command {
+  Start = "rubyLsp.start",
+  Stop = "rubyLsp.stop",
+  Restart = "rubyLsp.restart",
+  Update = "rubyLsp.update",
+  ToggleExperimentalFeatures = "rubyLsp.toggleExperimentalFeatures",
+  ServerOptions = "rubyLsp.serverOptions",
+  ToggleYjit = "rubyLsp.toggleYjit",
+  SelectVersionManager = "rubyLsp.selectRubyVersionManager",
+  ToggleFeatures = "rubyLsp.toggleFeatures",
+  FormatterHelp = "rubyLsp.formatterHelp",
+  RunTest = "rubyLsp.runTest",
+  RunTestInTerminal = "rubyLsp.runTestInTerminal",
+  DebugTest = "rubyLsp.debugTest",
+  OpenLink = "rubyLsp.openLink",
+  ShowSyntaxTree = "rubyLsp.showSyntaxTree",
+}
+
 export const asyncExec = promisify(exec);
-export const LOG_CHANNEL = vscode.window.createOutputChannel("Ruby LSP", {
+export const LSP_NAME = "Ruby LSP";
+export const LOG_CHANNEL = vscode.window.createOutputChannel(LSP_NAME, {
   log: true,
 });
 
