@@ -5,11 +5,11 @@ import * as os from "os";
 
 import { afterEach } from "mocha";
 import * as vscode from "vscode";
+import { State } from "vscode-languageclient/node";
 
 import { Ruby, VersionManager } from "../../ruby";
 import { Telemetry, TelemetryApi, TelemetryEvent } from "../../telemetry";
 import { TestController } from "../../testController";
-import { ServerState } from "../../status";
 import Client from "../../client";
 
 class FakeApi implements TelemetryApi {
@@ -27,19 +27,14 @@ class FakeApi implements TelemetryApi {
 
 suite("Client", () => {
   let client: Client | undefined;
-  let testController: TestController | undefined;
   const managerConfig = vscode.workspace.getConfiguration("rubyLsp");
   const currentManager = managerConfig.get("rubyVersionManager");
   const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
   fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.2.2");
 
   afterEach(async () => {
-    if (client && client.state === ServerState.Running) {
+    if (client && client.state === State.Running) {
       await client.stop();
-    }
-
-    if (testController) {
-      testController.dispose();
     }
 
     managerConfig.update("rubyVersionManager", currentManager, true, true);
@@ -75,7 +70,9 @@ suite("Client", () => {
 
     const testController = new TestController(
       context,
-      tmpPath,
+      {
+        uri: { fsPath: tmpPath },
+      } as vscode.WorkspaceFolder,
       ruby,
       telemetry,
     );
@@ -88,6 +85,6 @@ suite("Client", () => {
       tmpPath,
     );
     await client.start();
-    assert.strictEqual(client.state, ServerState.Running);
+    assert.strictEqual(client.state, State.Running);
   }).timeout(30000);
 });

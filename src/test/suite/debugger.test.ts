@@ -12,7 +12,9 @@ suite("Debugger", () => {
   test("Provide debug configurations returns the default configs", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: {} } as Ruby;
-    const debug = new Debugger(context, ruby, "fake");
+    const debug = new Debugger(context, ruby, {
+      uri: { fsPath: "fake" },
+    } as vscode.WorkspaceFolder);
     const configs = debug.provideDebugConfigurations!(undefined);
     assert.deepEqual(
       [
@@ -40,12 +42,15 @@ suite("Debugger", () => {
     );
 
     debug.dispose();
+    context.subscriptions.forEach((subscription) => subscription.dispose());
   });
 
   test("Resolve configuration injects Ruby environment", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, "fake");
+    const debug = new Debugger(context, ruby, {
+      uri: { fsPath: "fake" },
+    } as vscode.WorkspaceFolder);
     const configs: any = debug.resolveDebugConfiguration!(undefined, {
       type: "ruby_lsp",
       name: "Debug",
@@ -56,12 +61,15 @@ suite("Debugger", () => {
 
     assert.strictEqual(ruby.env, configs.env);
     debug.dispose();
+    context.subscriptions.forEach((subscription) => subscription.dispose());
   });
 
   test("Resolve configuration injects Ruby environment and allows users custom environment", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, "fake");
+    const debug = new Debugger(context, ruby, {
+      uri: { fsPath: "fake" },
+    } as vscode.WorkspaceFolder);
     const configs: any = debug.resolveDebugConfiguration!(undefined, {
       type: "ruby_lsp",
       name: "Debug",
@@ -73,6 +81,7 @@ suite("Debugger", () => {
 
     assert.deepEqual({ parallel: "1", ...ruby.env }, configs.env);
     debug.dispose();
+    context.subscriptions.forEach((subscription) => subscription.dispose());
   });
 
   test("Resolve configuration injects BUNDLE_GEMFILE if there's a custom bundle", () => {
@@ -82,7 +91,9 @@ suite("Debugger", () => {
 
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, tmpPath);
+    const debug = new Debugger(context, ruby, {
+      uri: { fsPath: tmpPath },
+    } as vscode.WorkspaceFolder);
     const configs: any = debug.resolveDebugConfiguration!(undefined, {
       type: "ruby_lsp",
       name: "Debug",
@@ -102,6 +113,7 @@ suite("Debugger", () => {
     );
 
     debug.dispose();
+    context.subscriptions.forEach((subscription) => subscription.dispose());
     fs.rmSync(tmpPath, { recursive: true, force: true });
   });
 });

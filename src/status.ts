@@ -1,32 +1,8 @@
 import * as vscode from "vscode";
+import { State } from "vscode-languageclient";
 
 import { Ruby, VersionManager } from "./ruby";
-
-export enum ServerState {
-  Starting = "Starting",
-  Running = "Running",
-  Stopped = "Stopped",
-  Error = "Error",
-}
-
-// Lists every Command in the Ruby LSP
-export enum Command {
-  Start = "rubyLsp.start",
-  Stop = "rubyLsp.stop",
-  Restart = "rubyLsp.restart",
-  Update = "rubyLsp.update",
-  ToggleExperimentalFeatures = "rubyLsp.toggleExperimentalFeatures",
-  ServerOptions = "rubyLsp.serverOptions",
-  ToggleYjit = "rubyLsp.toggleYjit",
-  SelectVersionManager = "rubyLsp.selectRubyVersionManager",
-  ToggleFeatures = "rubyLsp.toggleFeatures",
-  FormatterHelp = "rubyLsp.formatterHelp",
-  RunTest = "rubyLsp.runTest",
-  RunTestInTerminal = "rubyLsp.runTestInTerminal",
-  DebugTest = "rubyLsp.debugTest",
-  OpenLink = "rubyLsp.openLink",
-  ShowSyntaxTree = "rubyLsp.showSyntaxTree",
-}
+import { Command } from "./common";
 
 const STOPPED_SERVER_OPTIONS = [
   { label: "Ruby LSP: Start", description: Command.Start },
@@ -41,7 +17,7 @@ const STARTED_SERVER_OPTIONS = [
 export interface ClientInterface {
   context: vscode.ExtensionContext;
   ruby: Ruby;
-  state: ServerState;
+  state: State;
   formatter: string;
   serverVersion: string | undefined;
 }
@@ -132,30 +108,30 @@ export class ServerStatus extends StatusItem {
 
   refresh(): void {
     switch (this.client.state) {
-      case ServerState.Running: {
+      case State.Running: {
         this.item.text = `Ruby LSP v${this.client.serverVersion}: Running`;
         this.item.command!.arguments = [STARTED_SERVER_OPTIONS];
         this.item.severity = vscode.LanguageStatusSeverity.Information;
         break;
       }
-      case ServerState.Starting: {
+      case State.Starting: {
         this.item.text = "Ruby LSP: Starting";
         this.item.command!.arguments = [STARTED_SERVER_OPTIONS];
         this.item.severity = vscode.LanguageStatusSeverity.Information;
         break;
       }
-      case ServerState.Stopped: {
+      case State.Stopped: {
         this.item.text = "Ruby LSP: Stopped";
         this.item.command!.arguments = [STOPPED_SERVER_OPTIONS];
         this.item.severity = vscode.LanguageStatusSeverity.Information;
         break;
       }
-      case ServerState.Error: {
-        this.item.text = "Ruby LSP: Error";
-        this.item.command!.arguments = [STOPPED_SERVER_OPTIONS];
-        this.item.severity = vscode.LanguageStatusSeverity.Error;
-        break;
-      }
+      // case ServerState.Error: {
+      //   this.item.text = "Ruby LSP: Error";
+      //   this.item.command!.arguments = [STOPPED_SERVER_OPTIONS];
+      //   this.item.severity = vscode.LanguageStatusSeverity.Error;
+      //   break;
+      // }
     }
   }
 

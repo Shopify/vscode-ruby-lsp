@@ -2,20 +2,20 @@ import * as assert from "assert";
 
 import * as vscode from "vscode";
 import { beforeEach, afterEach } from "mocha";
+import { State } from "vscode-languageclient/node";
 
 import { Ruby } from "../../ruby";
 import {
   RubyVersionStatus,
   ServerStatus,
   ExperimentalFeaturesStatus,
-  Command,
   YjitStatus,
   StatusItem,
-  ServerState,
   ClientInterface,
   FeaturesStatus,
   FormatterStatus,
 } from "../../status";
+import { Command } from "../../common";
 
 suite("StatusItems", () => {
   let ruby: Ruby;
@@ -41,7 +41,7 @@ suite("StatusItems", () => {
       client = {
         context,
         ruby,
-        state: ServerState.Running,
+        state: State.Running,
         formatter: "none",
         serverVersion: "1.0.0",
       };
@@ -74,7 +74,7 @@ suite("StatusItems", () => {
       client = {
         context,
         ruby,
-        state: ServerState.Running,
+        state: State.Running,
         formatter: "none",
         serverVersion: "1.0.0",
       };
@@ -94,7 +94,7 @@ suite("StatusItems", () => {
     });
 
     test("Refresh when server is starting", () => {
-      client.state = ServerState.Starting;
+      client.state = State.Starting;
       status.refresh();
       assert.strictEqual(status.item.text, "Ruby LSP: Starting");
       assert.strictEqual(
@@ -104,7 +104,7 @@ suite("StatusItems", () => {
     });
 
     test("Refresh when server is running", () => {
-      client.state = ServerState.Running;
+      client.state = State.Running;
       status.refresh();
       assert.strictEqual(status.item.text, "Ruby LSP v1.0.0: Running");
       assert.strictEqual(
@@ -114,7 +114,7 @@ suite("StatusItems", () => {
     });
 
     test("Refresh when server is stopping", () => {
-      client.state = ServerState.Stopped;
+      client.state = State.Stopped;
       status.refresh();
       assert.strictEqual(status.item.text, "Ruby LSP: Stopped");
       assert.strictEqual(
@@ -123,15 +123,15 @@ suite("StatusItems", () => {
       );
     });
 
-    test("Refresh when server has errored", () => {
-      client.state = ServerState.Error;
-      status.refresh();
-      assert.strictEqual(status.item.text, "Ruby LSP: Error");
-      assert.strictEqual(
-        status.item.severity,
-        vscode.LanguageStatusSeverity.Error,
-      );
-    });
+    // test("Refresh when server has errored", () => {
+    //   client.state = State.Error;
+    //   status.refresh();
+    //   assert.strictEqual(status.item.text, "Ruby LSP: Error");
+    //   assert.strictEqual(
+    //     status.item.severity,
+    //     vscode.LanguageStatusSeverity.Error,
+    //   );
+    // });
   });
 
   suite("ExperimentalFeaturesStatus", () => {
@@ -141,7 +141,7 @@ suite("StatusItems", () => {
         context,
         ruby,
         formatter,
-        state: ServerState.Running,
+        state: State.Running,
         serverVersion: "1.0.0",
       };
       status = new ExperimentalFeaturesStatus(client);
@@ -165,7 +165,7 @@ suite("StatusItems", () => {
       client = {
         context,
         ruby,
-        state: ServerState.Running,
+        state: State.Running,
         formatter: "none",
         serverVersion: "1.0.0",
       };
@@ -195,7 +195,7 @@ suite("StatusItems", () => {
       client = {
         context,
         ruby,
-        state: ServerState.Running,
+        state: State.Running,
         formatter: "none",
         serverVersion: "1.0.0",
       };
@@ -231,7 +231,7 @@ suite("StatusItems", () => {
         context,
         ruby,
         formatter,
-        state: ServerState.Running,
+        state: State.Running,
         serverVersion: "1.0.0",
       });
     });
@@ -293,7 +293,7 @@ suite("StatusItems", () => {
       client = {
         context,
         ruby,
-        state: ServerState.Running,
+        state: State.Running,
         formatter: "auto",
         serverVersion: "1.0.0",
       };
