@@ -254,7 +254,7 @@ export class TestController {
 
           const output: string = await this.assertTestPasses(
             test,
-            workspace.workingDirectory,
+            workspace.workspaceFolder.uri.fsPath,
             workspace.ruby.env,
           );
 

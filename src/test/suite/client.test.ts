@@ -66,7 +66,9 @@ suite("Client", () => {
     await ruby.activateRuby();
 
     const telemetry = new Telemetry(context, new FakeApi());
-    const client = new Client(context, telemetry, ruby, () => {}, tmpPath);
+    const client = new Client(context, telemetry, ruby, () => {}, {
+      uri: { fsPath: tmpPath },
+    } as vscode.WorkspaceFolder);
     await client.start();
     assert.strictEqual(client.state, State.Running);
   }).timeout(30000);

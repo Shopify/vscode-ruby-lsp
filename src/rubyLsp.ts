@@ -38,6 +38,8 @@ export class RubyLsp {
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       STATUS_EMITTER.fire(this.currentActiveWorkspace(editor));
     });
+
+    // TODO: onDidChangeWorkspaceFolders
   }
 
   // Activate the extension. This method should perform all actions necessary to start the extension, such as booting

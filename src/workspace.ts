@@ -17,7 +17,7 @@ export class Workspace implements WorkspaceInterface {
   public lspClient?: Client;
   public readonly ruby: Ruby;
   public readonly createTestItems: (response: CodeLens[]) => void;
-  public readonly workingDirectory: string;
+  public readonly workspaceFolder: vscode.WorkspaceFolder;
   private readonly context: vscode.ExtensionContext;
   private readonly telemetry: Telemetry;
   #error = false;
@@ -29,7 +29,7 @@ export class Workspace implements WorkspaceInterface {
     createTestItems: (response: CodeLens[]) => void,
   ) {
     this.context = context;
-    this.workingDirectory = workspaceFolder.uri.fsPath;
+    this.workspaceFolder = workspaceFolder;
     this.telemetry = telemetry;
     this.ruby = new Ruby(context, workspaceFolder);
     this.createTestItems = createTestItems;
@@ -46,13 +46,14 @@ export class Workspace implements WorkspaceInterface {
     }
 
     try {
-      await fs.access(this.workingDirectory, fs.constants.W_OK);
+      await fs.access(this.workspaceFolder.uri.fsPath, fs.constants.W_OK);
     } catch (error: any) {
       this.error = true;
 
       vscode.window.showErrorMessage(
-        `Directory ${this.workingDirectory} is not writable. The Ruby LSP server needs to be able to create a .ruby-lsp
-        directory to function appropriately. Consider switching to a directory for which VS Code has write permissions`,
+        `Directory ${this.workspaceFolder.uri.fsPath} is not writable. The Ruby LSP server needs to be able to create a
+        .ruby-lsp directory to function appropriately. Consider switching to a directory for which VS Code has write
+        permissions`,
       );
 
       return;
@@ -82,7 +83,7 @@ export class Workspace implements WorkspaceInterface {
       this.telemetry,
       this.ruby,
       this.createTestItems,
-      this.workingDirectory,
+      this.workspaceFolder,
     );
 
     try {
@@ -126,14 +127,14 @@ export class Workspace implements WorkspaceInterface {
     );
 
     const { stderr } = await asyncExec("gem list ruby-lsp 1>&2", {
-      cwd: this.workingDirectory,
+      cwd: this.workspaceFolder.uri.fsPath,
       env: this.ruby.env,
     });
 
     // If the gem is not yet installed, install it
     if (!stderr.includes("ruby-lsp")) {
       await asyncExec("gem install ruby-lsp", {
-        cwd: this.workingDirectory,
+        cwd: this.workspaceFolder.uri.fsPath,
         env: this.ruby.env,
       });
 
@@ -148,7 +149,7 @@ export class Workspace implements WorkspaceInterface {
     ) {
       try {
         await asyncExec("gem update ruby-lsp", {
-          cwd: this.workingDirectory,
+          cwd: this.workspaceFolder.uri.fsPath,
           env: this.ruby.env,
         });
         this.context.workspaceState.update("rubyLsp.lastGemUpdate", Date.now());
@@ -196,7 +197,7 @@ export class Workspace implements WorkspaceInterface {
     pattern: string,
   ) {
     const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(this.workingDirectory, pattern),
+      new vscode.RelativePattern(this.workspaceFolder.uri.fsPath, pattern),
     );
     context.subscriptions.push(watcher);
 

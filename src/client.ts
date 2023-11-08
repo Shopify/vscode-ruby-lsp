@@ -25,7 +25,10 @@ interface EnabledFeatures {
 }
 
 // Get the executables to start the server based on the user's configuration
-function lspExecutables(cwd: string, env: NodeJS.ProcessEnv): ServerOptions {
+function lspExecutables(
+  workspaceFolder: vscode.WorkspaceFolder,
+  env: NodeJS.ProcessEnv,
+): ServerOptions {
   let run: Executable;
   let debug: Executable;
   const branch: string = vscode.workspace
@@ -35,7 +38,11 @@ function lspExecutables(cwd: string, env: NodeJS.ProcessEnv): ServerOptions {
     .getConfiguration("rubyLsp")
     .get("bundleGemfile")!;
 
-  const executableOptions: ExecutableOptions = { cwd, env, shell: true };
+  const executableOptions: ExecutableOptions = {
+    cwd: workspaceFolder.uri.fsPath,
+    env,
+    shell: true,
+  };
 
   // If there's a user defined custom bundle, we run the LSP with `bundle exec` and just trust the user configured
   // their bundle. Otherwise, we run the global install of the LSP and use our custom bundle logic in the server
@@ -70,6 +77,7 @@ function lspExecutables(cwd: string, env: NodeJS.ProcessEnv): ServerOptions {
 
 function clientOptions(
   configuration: vscode.WorkspaceConfiguration,
+  workspaceFolder: vscode.WorkspaceFolder,
 ): LanguageClientOptions {
   const pullOn: "change" | "save" | "both" =
     configuration.get("pullDiagnosticsOn")!;
@@ -83,7 +91,10 @@ function clientOptions(
   const enabledFeatures = Object.keys(features).filter((key) => features[key]);
 
   return {
-    documentSelector: [{ language: "ruby" }],
+    documentSelector: [
+      { language: "ruby", pattern: `${workspaceFolder.uri.fsPath}/**/*` },
+    ],
+    workspaceFolder,
     diagnosticCollectionName: LSP_NAME,
     outputChannel: LOG_CHANNEL,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
@@ -115,19 +126,22 @@ export default class Client extends LanguageClient implements ClientInterface {
     telemetry: Telemetry,
     ruby: Ruby,
     createTestItems: (response: CodeLens[]) => void,
-    workingFolder: string,
+    workspaceFolder: vscode.WorkspaceFolder,
   ) {
     super(
       LSP_NAME,
-      lspExecutables(workingFolder, ruby.env),
-      clientOptions(vscode.workspace.getConfiguration("rubyLsp")),
+      lspExecutables(workspaceFolder, ruby.env),
+      clientOptions(
+        vscode.workspace.getConfiguration("rubyLsp"),
+        workspaceFolder,
+      ),
     );
 
     // Middleware are part of client options, but because they must reference `this`, we cannot make it a part of the
     // `super` call (TypeScript does not allow accessing `this` before invoking `super`)
     this.registerMiddleware();
 
-    this.workingDirectory = workingFolder;
+    this.workingDirectory = workspaceFolder.uri.fsPath;
     this.baseFolder = path.basename(this.workingDirectory);
     this.telemetry = telemetry;
     this.createTestItems = createTestItems;
