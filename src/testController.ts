@@ -123,14 +123,21 @@ export class TestController {
     // eslint-disable-next-line no-param-reassign
     command ??= this.testCommands.get(this.findTestByActiveLine()!) || "";
 
-    await this.telemetry.sendCodeLensEvent("test_in_terminal");
-
     if (this.terminal === undefined) {
       this.terminal = this.getTerminal();
     }
 
     this.terminal.show();
     this.terminal.sendText(command);
+
+    const workspace = this.currentWorkspace();
+
+    if (workspace?.lspClient?.serverVersion) {
+      await this.telemetry.sendCodeLensEvent(
+        "test_in_terminal",
+        workspace.lspClient.serverVersion,
+      );
+    }
   }
 
   runOnClick(testId: string) {
@@ -191,7 +198,6 @@ export class TestController {
     request: vscode.TestRunRequest,
     _token: vscode.CancellationToken,
   ) {
-    await this.telemetry.sendCodeLensEvent("debug");
     const run = this.testController.createTestRun(request, undefined, true);
     const test = request.include![0];
 
@@ -199,13 +205,21 @@ export class TestController {
     await this.debugTest("", "", this.testCommands.get(test)!);
     run.passed(test, Date.now() - start);
     run.end();
+
+    const workspace = this.currentWorkspace();
+
+    if (workspace?.lspClient?.serverVersion) {
+      await this.telemetry.sendCodeLensEvent(
+        "debug",
+        workspace.lspClient.serverVersion,
+      );
+    }
   }
 
   private async runHandler(
     request: vscode.TestRunRequest,
     token: vscode.CancellationToken,
   ) {
-    await this.telemetry.sendCodeLensEvent("test");
     const run = this.testController.createTestRun(request, undefined, true);
     const queue: vscode.TestItem[] = [];
     const enqueue = (test: vscode.TestItem) => {
@@ -288,6 +302,15 @@ export class TestController {
 
     // Make sure to end the run after all tests have been executed
     run.end();
+
+    const workspace = this.currentWorkspace();
+
+    if (workspace?.lspClient?.serverVersion) {
+      await this.telemetry.sendCodeLensEvent(
+        "test",
+        workspace.lspClient.serverVersion,
+      );
+    }
   }
 
   private async assertTestPasses(

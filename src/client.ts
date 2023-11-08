@@ -100,6 +100,7 @@ function clientOptions(
 
 export default class Client extends LanguageClient implements ClientInterface {
   public readonly ruby: Ruby;
+  public serverVersion?: string;
   private readonly workingDirectory: string;
   private readonly telemetry: Telemetry;
   private readonly createTestItems: (response: CodeLens[]) => void;
@@ -139,7 +140,7 @@ export default class Client extends LanguageClient implements ClientInterface {
   // already running
   async performAfterStart() {
     await this.determineFormatter();
-    this.telemetry.serverVersion = await this.getServerVersion();
+    this.serverVersion = await this.getServerVersion();
   }
 
   async restart() {
@@ -161,10 +162,6 @@ export default class Client extends LanguageClient implements ClientInterface {
 
   get formatter(): string {
     return this.#formatter;
-  }
-
-  get serverVersion(): string | undefined {
-    return this.telemetry.serverVersion;
   }
 
   async determineFormatter() {

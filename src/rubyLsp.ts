@@ -99,8 +99,16 @@ export class RubyLsp {
       vscode.commands.registerCommand(
         Command.OpenLink,
         async (link: string) => {
-          await this.telemetry.sendCodeLensEvent("link");
           vscode.env.openExternal(vscode.Uri.parse(link));
+
+          const workspace = this.currentActiveWorkspace();
+
+          if (workspace?.lspClient?.serverVersion) {
+            await this.telemetry.sendCodeLensEvent(
+              "link",
+              workspace.lspClient.serverVersion,
+            );
+          }
         },
       ),
       vscode.commands.registerCommand(
