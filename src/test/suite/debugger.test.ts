@@ -49,7 +49,10 @@ suite("Debugger", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
     const debug = new Debugger(context, () => {
-      return { ruby } as Workspace;
+      return {
+        ruby,
+        workspaceFolder: { uri: { fsPath: "fake" } },
+      } as Workspace;
     });
     const configs: any = debug.resolveDebugConfiguration!(
       { uri: { fsPath: "fake" } } as vscode.WorkspaceFolder,
@@ -71,7 +74,10 @@ suite("Debugger", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
     const debug = new Debugger(context, () => {
-      return { ruby } as Workspace;
+      return {
+        ruby,
+        workspaceFolder: { uri: { fsPath: "fake" } },
+      } as Workspace;
     });
     const configs: any = debug.resolveDebugConfiguration!(
       { uri: { fsPath: "fake" } } as vscode.WorkspaceFolder,
@@ -98,7 +104,10 @@ suite("Debugger", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
     const debug = new Debugger(context, () => {
-      return { ruby } as Workspace;
+      return {
+        ruby,
+        workspaceFolder: { uri: { fsPath: tmpPath } },
+      } as Workspace;
     });
     const configs: any = debug.resolveDebugConfiguration!(
       { uri: { fsPath: tmpPath } } as vscode.WorkspaceFolder,
