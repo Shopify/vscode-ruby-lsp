@@ -1,10 +1,10 @@
 import fs from "fs/promises";
 
 import * as vscode from "vscode";
+import { CodeLens } from "vscode-languageclient/node";
 
 import { Ruby } from "./ruby";
 import { Telemetry } from "./telemetry";
-import { TestController } from "./testController";
 import Client from "./client";
 import { Debugger } from "./debugger";
 import {
@@ -17,8 +17,8 @@ import {
 export class Workspace implements WorkspaceInterface {
   public lspClient?: Client;
   public readonly ruby: Ruby;
-  private readonly workingDirectory: string;
-  private readonly testController: TestController;
+  public readonly createTestItems: (response: CodeLens[]) => void;
+  public readonly workingDirectory: string;
   private readonly debug: Debugger;
   private readonly context: vscode.ExtensionContext;
   private readonly telemetry: Telemetry;
@@ -28,17 +28,13 @@ export class Workspace implements WorkspaceInterface {
     context: vscode.ExtensionContext,
     workspaceFolder: vscode.WorkspaceFolder,
     telemetry: Telemetry,
+    createTestItems: (response: CodeLens[]) => void,
   ) {
     this.context = context;
     this.workingDirectory = workspaceFolder.uri.fsPath;
     this.telemetry = telemetry;
     this.ruby = new Ruby(context, workspaceFolder);
-    this.testController = new TestController(
-      context,
-      workspaceFolder,
-      this.ruby,
-      telemetry,
-    );
+    this.createTestItems = createTestItems;
 
     this.debug = new Debugger(context, this.ruby, workspaceFolder);
     this.registerRestarts(context);
@@ -90,7 +86,7 @@ export class Workspace implements WorkspaceInterface {
       this.context,
       this.telemetry,
       this.ruby,
-      this.testController,
+      this.createTestItems,
       this.workingDirectory,
     );
 

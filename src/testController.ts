@@ -4,9 +4,8 @@ import { promisify } from "util";
 import * as vscode from "vscode";
 import { CodeLens } from "vscode-languageclient/node";
 
-import { Ruby } from "./ruby";
 import { Telemetry } from "./telemetry";
-import { Command } from "./common";
+import { Workspace } from "./workspace";
 
 const asyncExec = promisify(exec);
 
@@ -18,25 +17,22 @@ export class TestController {
   private readonly testRunProfile: vscode.TestRunProfile;
   private readonly testDebugProfile: vscode.TestRunProfile;
   private readonly debugTag: vscode.TestTag = new vscode.TestTag("debug");
-  private readonly workingFolder: string;
   private terminal: vscode.Terminal | undefined;
-  private readonly ruby: Ruby;
   private readonly telemetry: Telemetry;
   // We allow the timeout to be configured in seconds, but exec expects it in milliseconds
   private readonly testTimeout = vscode.workspace
     .getConfiguration("rubyLsp")
     .get("testTimeout") as number;
 
+  private readonly currentWorkspace: () => Workspace | undefined;
+
   constructor(
     context: vscode.ExtensionContext,
-    workspaceFolder: vscode.WorkspaceFolder,
-    ruby: Ruby,
     telemetry: Telemetry,
+    currentWorkspace: () => Workspace | undefined,
   ) {
-    this.workingFolder = workspaceFolder.uri.fsPath;
-    this.ruby = ruby;
     this.telemetry = telemetry;
-
+    this.currentWorkspace = currentWorkspace;
     this.testController = vscode.tests.createTestController(
       "rubyTests",
       "Ruby Tests",
@@ -72,20 +68,6 @@ export class TestController {
       this.testController,
       this.testDebugProfile,
       this.testRunProfile,
-      vscode.commands.registerCommand(
-        Command.RunTest,
-        (_path, name, _command) => {
-          this.runOnClick(name);
-        },
-      ),
-      vscode.commands.registerCommand(
-        Command.RunTestInTerminal,
-        this.runTestInTerminal.bind(this),
-      ),
-      vscode.commands.registerCommand(
-        Command.DebugTest,
-        this.debugTest.bind(this),
-      ),
     );
   }
 
@@ -137,24 +119,7 @@ export class TestController {
     });
   }
 
-  private debugTest(_path: string, _name: string, command?: string) {
-    // eslint-disable-next-line no-param-reassign
-    command ??= this.testCommands.get(this.findTestByActiveLine()!) || "";
-
-    return vscode.debug.startDebugging(undefined, {
-      type: "ruby_lsp",
-      name: "Debug",
-      request: "launch",
-      program: command,
-      env: { ...this.ruby.env, DISABLE_SPRING: "1" },
-    });
-  }
-
-  private async runTestInTerminal(
-    _path: string,
-    _name: string,
-    command?: string,
-  ) {
+  async runTestInTerminal(_path: string, _name: string, command?: string) {
     // eslint-disable-next-line no-param-reassign
     command ??= this.testCommands.get(this.findTestByActiveLine()!) || "";
 
@@ -166,6 +131,48 @@ export class TestController {
 
     this.terminal.show();
     this.terminal.sendText(command);
+  }
+
+  runOnClick(testId: string) {
+    const test = this.findTestById(testId);
+
+    if (!test) return;
+
+    vscode.commands.executeCommand("vscode.revealTestInExplorer", test);
+    let tokenSource: vscode.CancellationTokenSource | null =
+      new vscode.CancellationTokenSource();
+
+    tokenSource.token.onCancellationRequested(() => {
+      tokenSource?.dispose();
+      tokenSource = null;
+
+      vscode.window.showInformationMessage("Cancelled the progress");
+    });
+
+    const testRun = new vscode.TestRunRequest([test], [], this.testRunProfile);
+
+    this.testRunProfile.runHandler(testRun, tokenSource.token);
+  }
+
+  debugTest(_path: string, _name: string, command?: string) {
+    // eslint-disable-next-line no-param-reassign
+    command ??= this.testCommands.get(this.findTestByActiveLine()!) || "";
+
+    const workspace = this.currentWorkspace();
+
+    if (!workspace) {
+      throw new Error(
+        "No workspace found. Debugging requires a workspace to be opened",
+      );
+    }
+
+    return vscode.debug.startDebugging(undefined, {
+      type: "ruby_lsp",
+      name: "Debug",
+      request: "launch",
+      program: command,
+      env: { ...workspace.ruby.env, DISABLE_SPRING: "1" },
+    });
   }
 
   private getTerminal() {
@@ -224,7 +231,19 @@ export class TestController {
       if (test.tags.find((tag) => tag.id === "example")) {
         const start = Date.now();
         try {
-          const output: string = await this.assertTestPasses(test);
+          const workspace = this.currentWorkspace();
+
+          if (!workspace) {
+            run.errored(test, new vscode.TestMessage("No workspace found"));
+            continue;
+          }
+
+          const output: string = await this.assertTestPasses(
+            test,
+            workspace.workingDirectory,
+            workspace.ruby.env,
+          );
+
           run.appendOutput(output, undefined, test);
           run.passed(test, Date.now() - start);
         } catch (err: any) {
@@ -271,11 +290,15 @@ export class TestController {
     run.end();
   }
 
-  private async assertTestPasses(test: vscode.TestItem) {
+  private async assertTestPasses(
+    test: vscode.TestItem,
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+  ) {
     try {
       const result = await asyncExec(this.testCommands.get(test)!, {
-        cwd: this.workingFolder,
-        env: this.ruby.env,
+        cwd,
+        env,
         timeout: this.testTimeout * 1000,
       });
       return result.stdout;
@@ -286,27 +309,6 @@ export class TestController {
         throw new Error(error.stdout);
       }
     }
-  }
-
-  private runOnClick(testId: string) {
-    const test = this.findTestById(testId);
-
-    if (!test) return;
-
-    vscode.commands.executeCommand("vscode.revealTestInExplorer", test);
-    let tokenSource: vscode.CancellationTokenSource | null =
-      new vscode.CancellationTokenSource();
-
-    tokenSource.token.onCancellationRequested(() => {
-      tokenSource?.dispose();
-      tokenSource = null;
-
-      vscode.window.showInformationMessage("Cancelled the progress");
-    });
-
-    const testRun = new vscode.TestRunRequest([test], [], this.testRunProfile);
-
-    this.testRunProfile.runHandler(testRun, tokenSource.token);
   }
 
   private findTestById(

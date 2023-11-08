@@ -19,7 +19,6 @@ import {
 import { asyncExec, LOG_CHANNEL, LSP_NAME, ClientInterface } from "./common";
 import { Telemetry, RequestEvent } from "./telemetry";
 import { Ruby } from "./ruby";
-import { TestController } from "./testController";
 
 interface EnabledFeatures {
   [key: string]: boolean;
@@ -103,7 +102,7 @@ export default class Client extends LanguageClient implements ClientInterface {
   public readonly ruby: Ruby;
   private readonly workingDirectory: string;
   private readonly telemetry: Telemetry;
-  private readonly testController: TestController;
+  private readonly createTestItems: (response: CodeLens[]) => void;
   private readonly baseFolder;
   private requestId = 0;
 
@@ -114,7 +113,7 @@ export default class Client extends LanguageClient implements ClientInterface {
     context: vscode.ExtensionContext,
     telemetry: Telemetry,
     ruby: Ruby,
-    testController: TestController,
+    createTestItems: (response: CodeLens[]) => void,
     workingFolder: string,
   ) {
     super(
@@ -130,7 +129,7 @@ export default class Client extends LanguageClient implements ClientInterface {
     this.workingDirectory = workingFolder;
     this.baseFolder = path.basename(this.workingDirectory);
     this.telemetry = telemetry;
-    this.testController = testController;
+    this.createTestItems = createTestItems;
     this.#context = context;
     this.ruby = ruby;
     this.#formatter = "";
@@ -383,7 +382,7 @@ export default class Client extends LanguageClient implements ClientInterface {
           ) as CodeLens[];
 
           if (testLenses.length) {
-            this.testController.createTestItems(testLenses);
+            this.createTestItems(testLenses);
           }
         }
 

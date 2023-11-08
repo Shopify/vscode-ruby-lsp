@@ -9,7 +9,6 @@ import { State } from "vscode-languageclient/node";
 
 import { Ruby, VersionManager } from "../../ruby";
 import { Telemetry, TelemetryApi, TelemetryEvent } from "../../telemetry";
-import { TestController } from "../../testController";
 import Client from "../../client";
 
 class FakeApi implements TelemetryApi {
@@ -67,23 +66,7 @@ suite("Client", () => {
     await ruby.activateRuby();
 
     const telemetry = new Telemetry(context, new FakeApi());
-
-    const testController = new TestController(
-      context,
-      {
-        uri: { fsPath: tmpPath },
-      } as vscode.WorkspaceFolder,
-      ruby,
-      telemetry,
-    );
-
-    const client = new Client(
-      context,
-      telemetry,
-      ruby,
-      testController,
-      tmpPath,
-    );
+    const client = new Client(context, telemetry, ruby, () => {}, tmpPath);
     await client.start();
     assert.strictEqual(client.state, State.Running);
   }).timeout(30000);

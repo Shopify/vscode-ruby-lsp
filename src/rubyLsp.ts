@@ -7,6 +7,7 @@ import { Workspace } from "./workspace";
 import { Command, STATUS_EMITTER } from "./common";
 import { VersionManager } from "./ruby";
 import { StatusItems } from "./status";
+import { TestController } from "./testController";
 
 // The RubyLsp class represents an instance of the entire extension. This should only be instantiated once at the
 // activation event. This class controls all of the existing workspaces, telemetry and handles all commands
@@ -15,10 +16,16 @@ export class RubyLsp {
   private readonly telemetry: Telemetry;
   private readonly context: vscode.ExtensionContext;
   private readonly statusItems: StatusItems;
+  private readonly testController: TestController;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.telemetry = new Telemetry(context);
+    this.testController = new TestController(
+      context,
+      this.telemetry,
+      this.currentActiveWorkspace.bind(this),
+    );
     this.registerCommands(context);
 
     this.statusItems = new StatusItems();
@@ -40,6 +47,7 @@ export class RubyLsp {
         this.context,
         workspaceFolder,
         this.telemetry,
+        this.testController.createTestItems.bind(this.testController),
       );
       this.workspaces.set(workspaceFolder.uri.toString(), workspace);
 
@@ -200,6 +208,20 @@ export class RubyLsp {
             configuration.update("rubyVersionManager", manager, true, true);
           }
         },
+      ),
+      vscode.commands.registerCommand(
+        Command.RunTest,
+        (_path, name, _command) => {
+          this.testController.runOnClick(name);
+        },
+      ),
+      vscode.commands.registerCommand(
+        Command.RunTestInTerminal,
+        this.testController.runTestInTerminal.bind(this.testController),
+      ),
+      vscode.commands.registerCommand(
+        Command.DebugTest,
+        this.testController.debugTest.bind(this.testController),
       ),
     );
   }
