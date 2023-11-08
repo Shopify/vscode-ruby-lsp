@@ -6,7 +6,6 @@ import { CodeLens } from "vscode-languageclient/node";
 import { Ruby } from "./ruby";
 import { Telemetry } from "./telemetry";
 import Client from "./client";
-import { Debugger } from "./debugger";
 import {
   asyncExec,
   LOG_CHANNEL,
@@ -19,7 +18,6 @@ export class Workspace implements WorkspaceInterface {
   public readonly ruby: Ruby;
   public readonly createTestItems: (response: CodeLens[]) => void;
   public readonly workingDirectory: string;
-  private readonly debug: Debugger;
   private readonly context: vscode.ExtensionContext;
   private readonly telemetry: Telemetry;
   #error = false;
@@ -36,10 +34,7 @@ export class Workspace implements WorkspaceInterface {
     this.ruby = new Ruby(context, workspaceFolder);
     this.createTestItems = createTestItems;
 
-    this.debug = new Debugger(context, this.ruby, workspaceFolder);
     this.registerRestarts(context);
-
-    context.subscriptions.push(this.debug);
   }
 
   async start() {

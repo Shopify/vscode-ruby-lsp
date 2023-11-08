@@ -7,14 +7,14 @@ import * as vscode from "vscode";
 
 import { Debugger } from "../../debugger";
 import { Ruby } from "../../ruby";
+import { Workspace } from "../../workspace";
 
 suite("Debugger", () => {
   test("Provide debug configurations returns the default configs", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
-    const ruby = { env: {} } as Ruby;
-    const debug = new Debugger(context, ruby, {
-      uri: { fsPath: "fake" },
-    } as vscode.WorkspaceFolder);
+    const debug = new Debugger(context, (_uri) => {
+      return undefined;
+    });
     const configs = debug.provideDebugConfigurations!(undefined);
     assert.deepEqual(
       [
@@ -48,16 +48,19 @@ suite("Debugger", () => {
   test("Resolve configuration injects Ruby environment", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, {
-      uri: { fsPath: "fake" },
-    } as vscode.WorkspaceFolder);
-    const configs: any = debug.resolveDebugConfiguration!(undefined, {
-      type: "ruby_lsp",
-      name: "Debug",
-      request: "launch",
-      // eslint-disable-next-line no-template-curly-in-string
-      program: "ruby ${file}",
+    const debug = new Debugger(context, () => {
+      return { ruby } as Workspace;
     });
+    const configs: any = debug.resolveDebugConfiguration!(
+      { uri: { fsPath: "fake" } } as vscode.WorkspaceFolder,
+      {
+        type: "ruby_lsp",
+        name: "Debug",
+        request: "launch",
+        // eslint-disable-next-line no-template-curly-in-string
+        program: "ruby ${file}",
+      },
+    );
 
     assert.strictEqual(ruby.env, configs.env);
     debug.dispose();
@@ -67,17 +70,20 @@ suite("Debugger", () => {
   test("Resolve configuration injects Ruby environment and allows users custom environment", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, {
-      uri: { fsPath: "fake" },
-    } as vscode.WorkspaceFolder);
-    const configs: any = debug.resolveDebugConfiguration!(undefined, {
-      type: "ruby_lsp",
-      name: "Debug",
-      request: "launch",
-      // eslint-disable-next-line no-template-curly-in-string
-      program: "ruby ${file}",
-      env: { parallel: "1" },
+    const debug = new Debugger(context, () => {
+      return { ruby } as Workspace;
     });
+    const configs: any = debug.resolveDebugConfiguration!(
+      { uri: { fsPath: "fake" } } as vscode.WorkspaceFolder,
+      {
+        type: "ruby_lsp",
+        name: "Debug",
+        request: "launch",
+        // eslint-disable-next-line no-template-curly-in-string
+        program: "ruby ${file}",
+        env: { parallel: "1" },
+      },
+    );
 
     assert.deepEqual({ parallel: "1", ...ruby.env }, configs.env);
     debug.dispose();
@@ -91,17 +97,20 @@ suite("Debugger", () => {
 
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
     const ruby = { env: { bogus: "hello!" } } as unknown as Ruby;
-    const debug = new Debugger(context, ruby, {
-      uri: { fsPath: tmpPath },
-    } as vscode.WorkspaceFolder);
-    const configs: any = debug.resolveDebugConfiguration!(undefined, {
-      type: "ruby_lsp",
-      name: "Debug",
-      request: "launch",
-      // eslint-disable-next-line no-template-curly-in-string
-      program: "ruby ${file}",
-      env: { parallel: "1" },
+    const debug = new Debugger(context, () => {
+      return { ruby } as Workspace;
     });
+    const configs: any = debug.resolveDebugConfiguration!(
+      { uri: { fsPath: tmpPath } } as vscode.WorkspaceFolder,
+      {
+        type: "ruby_lsp",
+        name: "Debug",
+        request: "launch",
+        // eslint-disable-next-line no-template-curly-in-string
+        program: "ruby ${file}",
+        env: { parallel: "1" },
+      },
+    );
 
     assert.deepEqual(
       {

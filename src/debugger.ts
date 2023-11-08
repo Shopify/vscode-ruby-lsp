@@ -4,26 +4,23 @@ import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 
 import * as vscode from "vscode";
 
-import { Ruby } from "./ruby";
 import { LOG_CHANNEL } from "./common";
+import { Workspace } from "./workspace";
 
 export class Debugger
   implements
     vscode.DebugAdapterDescriptorFactory,
     vscode.DebugConfigurationProvider
 {
-  private readonly workingFolder: string;
-  private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
+  private readonly getWorkspace: (uri: vscode.Uri) => Workspace | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
-    ruby: Ruby,
-    workspaceFolder: vscode.WorkspaceFolder,
+    getWorkspace: (uri: vscode.Uri) => Workspace | undefined,
   ) {
-    this.ruby = ruby;
-    this.workingFolder = workspaceFolder.uri.fsPath;
+    this.getWorkspace = getWorkspace;
 
     context.subscriptions.push(
       vscode.debug.registerDebugConfigurationProvider("ruby_lsp", this),
@@ -83,30 +80,33 @@ export class Debugger
   // insert defaults for the user. The most important thing is making sure the Ruby environment is a part of it so that
   // we launch using the right bundle and Ruby version
   resolveDebugConfiguration?(
-    _folder: vscode.WorkspaceFolder | undefined,
+    folder: vscode.WorkspaceFolder | undefined,
     debugConfiguration: vscode.DebugConfiguration,
     _token?: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.DebugConfiguration> {
+    if (!folder) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+    const workspace = this.getWorkspace(folder.uri)!;
+
     if (debugConfiguration.env) {
       // If the user has their own debug launch configurations, we still need to inject the Ruby environment
       debugConfiguration.env = Object.assign(
         debugConfiguration.env,
-        this.ruby.env,
+        workspace.ruby.env,
       );
     } else {
-      debugConfiguration.env = this.ruby.env;
+      debugConfiguration.env = workspace.ruby.env;
     }
 
-    let customGemfilePath = path.join(
-      this.workingFolder,
-      ".ruby-lsp",
-      "Gemfile",
-    );
+    const workspacePath = folder.uri.fsPath;
+
+    let customGemfilePath = path.join(workspacePath, ".ruby-lsp", "Gemfile");
     if (fs.existsSync(customGemfilePath)) {
       debugConfiguration.env.BUNDLE_GEMFILE = customGemfilePath;
     }
 
-    customGemfilePath = path.join(this.workingFolder, ".ruby-lsp", "gems.rb");
+    customGemfilePath = path.join(workspacePath, ".ruby-lsp", "gems.rb");
     if (fs.existsSync(customGemfilePath)) {
       debugConfiguration.env.BUNDLE_GEMFILE = customGemfilePath;
     }
@@ -165,7 +165,8 @@ export class Debugger
   ): Promise<vscode.DebugAdapterDescriptor | undefined> {
     let initialMessage = "";
     let initialized = false;
-    const sockPath = this.socketPath();
+    const cwd = session.workspaceFolder!.uri.fsPath;
+    const sockPath = this.socketPath(cwd);
     const configuration = session.configuration;
 
     return new Promise((resolve, reject) => {
@@ -179,14 +180,14 @@ export class Debugger
         configuration.program,
       ];
 
-      LOG_CHANNEL.info(`Spawning debugger in directory ${this.workingFolder}`);
+      LOG_CHANNEL.info(`Spawning debugger in directory ${cwd}`);
       LOG_CHANNEL.info(`   Command bundle ${args.join(" ")}`);
       LOG_CHANNEL.info(`   Environment ${JSON.stringify(configuration.env)}`);
 
       this.debugProcess = spawn("bundle", args, {
         shell: true,
         env: configuration.env,
-        cwd: this.workingFolder,
+        cwd,
       });
 
       this.debugProcess.stderr.on("data", (data) => {
@@ -235,14 +236,14 @@ export class Debugger
 
   // Generate a socket path so that Ruby debug doesn't have to create one for us. This makes coordination easier since
   // we always know the path to the socket
-  private socketPath() {
+  private socketPath(cwd: string) {
     const socketsDir = path.join("/", "tmp", "ruby-lsp-debug-sockets");
     if (!fs.existsSync(socketsDir)) {
       fs.mkdirSync(socketsDir);
     }
 
     let socketIndex = 0;
-    const prefix = `ruby-debug-${path.basename(this.workingFolder)}`;
+    const prefix = `ruby-debug-${path.basename(cwd)}`;
     const existingSockets = fs
       .readdirSync(socketsDir)
       .map((file) => file)

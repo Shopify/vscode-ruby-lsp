@@ -8,6 +8,7 @@ import { Command, STATUS_EMITTER } from "./common";
 import { VersionManager } from "./ruby";
 import { StatusItems } from "./status";
 import { TestController } from "./testController";
+import { Debugger } from "./debugger";
 
 // The RubyLsp class represents an instance of the entire extension. This should only be instantiated once at the
 // activation event. This class controls all of the existing workspaces, telemetry and handles all commands
@@ -17,6 +18,7 @@ export class RubyLsp {
   private readonly context: vscode.ExtensionContext;
   private readonly statusItems: StatusItems;
   private readonly testController: TestController;
+  private readonly debug: Debugger;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -26,10 +28,11 @@ export class RubyLsp {
       this.telemetry,
       this.currentActiveWorkspace.bind(this),
     );
+    this.debug = new Debugger(context, this.getWorkspace.bind(this));
     this.registerCommands(context);
 
     this.statusItems = new StatusItems();
-    context.subscriptions.push(this.statusItems);
+    context.subscriptions.push(this.statusItems, this.debug);
 
     // Switch the status items based on which workspace is currently active
     vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -241,7 +244,11 @@ export class RubyLsp {
       return;
     }
 
-    return this.workspaces.get(workspaceFolder.uri.toString());
+    return this.getWorkspace(workspaceFolder.uri);
+  }
+
+  private getWorkspace(uri: vscode.Uri): Workspace | undefined {
+    return this.workspaces.get(uri.toString());
   }
 
   // Displays a quick pick to select which workspace to perform an action on. For example, if multiple workspaces exist,
@@ -257,7 +264,7 @@ export class RubyLsp {
       return;
     }
 
-    return this.workspaces.get(workspaceFolder.uri.toString());
+    return this.getWorkspace(workspaceFolder.uri);
   }
 
   // Show syntax tree command
@@ -278,7 +285,7 @@ export class RubyLsp {
         return;
       }
 
-      const workspace = this.workspaces.get(workspaceFolder.uri.toString());
+      const workspace = this.getWorkspace(workspaceFolder.uri);
 
       const selection = activeEditor.selection;
       let range: Range | undefined;
