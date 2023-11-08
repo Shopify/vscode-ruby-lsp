@@ -12,7 +12,7 @@ import { Workspace } from "../../workspace";
 suite("Debugger", () => {
   test("Provide debug configurations returns the default configs", () => {
     const context = { subscriptions: [] } as unknown as vscode.ExtensionContext;
-    const debug = new Debugger(context, (_uri) => {
+    const debug = new Debugger(context, () => {
       return undefined;
     });
     const configs = debug.provideDebugConfigurations!(undefined);

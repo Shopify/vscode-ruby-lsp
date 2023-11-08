@@ -14,13 +14,13 @@ export class Debugger
 {
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
-  private readonly getWorkspace: (uri: vscode.Uri) => Workspace | undefined;
+  private readonly currentActiveWorkspace: () => Workspace | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
-    getWorkspace: (uri: vscode.Uri) => Workspace | undefined,
+    currentActiveWorkspace: () => Workspace | undefined,
   ) {
-    this.getWorkspace = getWorkspace;
+    this.currentActiveWorkspace = currentActiveWorkspace;
 
     context.subscriptions.push(
       vscode.debug.registerDebugConfigurationProvider("ruby_lsp", this),
@@ -80,14 +80,15 @@ export class Debugger
   // insert defaults for the user. The most important thing is making sure the Ruby environment is a part of it so that
   // we launch using the right bundle and Ruby version
   resolveDebugConfiguration?(
-    folder: vscode.WorkspaceFolder | undefined,
+    _folder: vscode.WorkspaceFolder | undefined,
     debugConfiguration: vscode.DebugConfiguration,
     _token?: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.DebugConfiguration> {
-    if (!folder) {
+    const workspace = this.currentActiveWorkspace();
+
+    if (!workspace) {
       throw new Error("Debugging requires a workspace folder to be opened");
     }
-    const workspace = this.getWorkspace(folder.uri)!;
 
     if (debugConfiguration.env) {
       // If the user has their own debug launch configurations, we still need to inject the Ruby environment
@@ -99,7 +100,7 @@ export class Debugger
       debugConfiguration.env = workspace.ruby.env;
     }
 
-    const workspacePath = folder.uri.fsPath;
+    const workspacePath = workspace.workspaceFolder.uri.fsPath;
 
     let customGemfilePath = path.join(workspacePath, ".ruby-lsp", "Gemfile");
     if (fs.existsSync(customGemfilePath)) {
@@ -165,7 +166,14 @@ export class Debugger
   ): Promise<vscode.DebugAdapterDescriptor | undefined> {
     let initialMessage = "";
     let initialized = false;
-    const cwd = session.workspaceFolder!.uri.fsPath;
+
+    const workspace = this.currentActiveWorkspace();
+
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+
+    const cwd = workspace.workspaceFolder.uri.fsPath;
     const sockPath = this.socketPath(cwd);
     const configuration = session.configuration;
 
