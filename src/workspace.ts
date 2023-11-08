@@ -95,9 +95,6 @@ export class Workspace implements WorkspaceInterface {
       this.error = true;
       LOG_CHANNEL.error(`Error restarting the server: ${error.message}`);
     }
-
-    // Push the LSP client as a subcription so that it gets automatically disposed upon deactivation
-    this.context.subscriptions.push(this.lspClient);
   }
 
   async stop() {
@@ -106,6 +103,10 @@ export class Workspace implements WorkspaceInterface {
 
   async restart() {
     await this.lspClient?.restart();
+  }
+
+  async dispose() {
+    await this.lspClient?.dispose();
   }
 
   // Install or update the `ruby-lsp` gem globally with `gem install ruby-lsp` or `gem update ruby-lsp`. We only try to

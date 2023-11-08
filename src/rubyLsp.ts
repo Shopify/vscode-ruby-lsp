@@ -39,7 +39,23 @@ export class RubyLsp {
       STATUS_EMITTER.fire(this.currentActiveWorkspace(editor));
     });
 
-    // TODO: onDidChangeWorkspaceFolders
+    vscode.workspace.onDidChangeWorkspaceFolders(async (event) => {
+      // Stop the language server and dispose all removed workspaces
+      for (const workspaceFolder of event.removed) {
+        const workspace = this.getWorkspace(workspaceFolder.uri);
+
+        if (workspace) {
+          await workspace.stop();
+          await workspace.dispose();
+          this.workspaces.delete(workspaceFolder.uri.toString());
+        }
+      }
+
+      // Create and activate new workspaces for the added folders
+      for (const workspaceFolder of event.added) {
+        await this.createNewWorkspace(workspaceFolder);
+      }
+    });
   }
 
   // Activate the extension. This method should perform all actions necessary to start the extension, such as booting
@@ -48,15 +64,7 @@ export class RubyLsp {
     await this.telemetry.sendConfigurationEvents();
 
     for (const workspaceFolder of vscode.workspace.workspaceFolders!) {
-      const workspace = new Workspace(
-        this.context,
-        workspaceFolder,
-        this.telemetry,
-        this.testController.createTestItems.bind(this.testController),
-      );
-      this.workspaces.set(workspaceFolder.uri.toString(), workspace);
-
-      await workspace.start();
+      await this.createNewWorkspace(workspaceFolder);
     }
 
     this.context.subscriptions.push(
@@ -75,6 +83,19 @@ export class RubyLsp {
     for (const workspace of this.workspaces.values()) {
       await workspace.stop();
     }
+  }
+
+  private async createNewWorkspace(workspaceFolder: vscode.WorkspaceFolder) {
+    const workspace = new Workspace(
+      this.context,
+      workspaceFolder,
+      this.telemetry,
+      this.testController.createTestItems.bind(this.testController),
+    );
+    this.workspaces.set(workspaceFolder.uri.toString(), workspace);
+
+    await workspace.start();
+    this.context.subscriptions.push(workspace);
   }
 
   // Registers all extension commands. Commands can only be registered once, so this happens in the constructor. For
