@@ -10,6 +10,7 @@ import { State } from "vscode-languageclient/node";
 import { Ruby, VersionManager } from "../../ruby";
 import { Telemetry, TelemetryApi, TelemetryEvent } from "../../telemetry";
 import Client from "../../client";
+import { asyncExec } from "../../common";
 
 class FakeApi implements TelemetryApi {
   public sentEvents: TelemetryEvent[];
@@ -29,11 +30,17 @@ suite("Client", () => {
   const managerConfig = vscode.workspace.getConfiguration("rubyLsp");
   const currentManager = managerConfig.get("rubyVersionManager");
   const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+  const workspaceFolder: vscode.WorkspaceFolder = {
+    uri: vscode.Uri.parse(`file://${tmpPath}`),
+    name: path.basename(tmpPath),
+    index: 0,
+  };
   fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.2.2");
 
   afterEach(async () => {
     if (client && client.state === State.Running) {
       await client.stop();
+      await client.dispose();
     }
 
     managerConfig.update("rubyVersionManager", currentManager, true, true);
@@ -60,15 +67,22 @@ suite("Client", () => {
       },
     } as unknown as vscode.ExtensionContext;
 
-    const ruby = new Ruby(context, {
-      uri: { fsPath: tmpPath },
-    } as vscode.WorkspaceFolder);
+    const ruby = new Ruby(context, workspaceFolder);
     await ruby.activateRuby();
 
+    await asyncExec("gem install ruby-lsp", {
+      cwd: workspaceFolder.uri.fsPath,
+      env: ruby.env,
+    });
+
     const telemetry = new Telemetry(context, new FakeApi());
-    const client = new Client(context, telemetry, ruby, () => {}, {
-      uri: { fsPath: tmpPath },
-    } as vscode.WorkspaceFolder);
+    const client = new Client(
+      context,
+      telemetry,
+      ruby,
+      () => {},
+      workspaceFolder,
+    );
     await client.start();
     assert.strictEqual(client.state, State.Running);
   }).timeout(30000);
