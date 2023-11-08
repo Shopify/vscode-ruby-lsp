@@ -4,7 +4,9 @@ import { Range } from "vscode-languageclient/node";
 import { Telemetry } from "./telemetry";
 import DocumentProvider from "./documentProvider";
 import { Workspace } from "./workspace";
-import { Command } from "./common";
+import { Command, STATUS_EMITTER } from "./common";
+import { VersionManager } from "./ruby";
+import { StatusItems } from "./status";
 
 // The RubyLsp class represents an instance of the entire extension. This should only be instantiated once at the
 // activation event. This class controls all of the existing workspaces, telemetry and handles all commands
@@ -12,11 +14,20 @@ export class RubyLsp {
   private readonly workspaces: Map<string, Workspace> = new Map();
   private readonly telemetry: Telemetry;
   private readonly context: vscode.ExtensionContext;
+  private readonly statusItems: StatusItems;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.telemetry = new Telemetry(context);
     this.registerCommands(context);
+
+    this.statusItems = new StatusItems();
+    context.subscriptions.push(this.statusItems);
+
+    // Switch the status items based on which workspace is currently active
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      STATUS_EMITTER.fire(this.currentActiveWorkspace(editor));
+    });
   }
 
   // Activate the extension. This method should perform all actions necessary to start the extension, such as booting
@@ -41,6 +52,8 @@ export class RubyLsp {
         new DocumentProvider(),
       ),
     );
+
+    STATUS_EMITTER.fire(this.currentActiveWorkspace());
   }
 
   // Deactivate the extension, which should stop all language servers. Notice that this just stops anything that is
@@ -83,7 +96,130 @@ export class RubyLsp {
         Command.ShowSyntaxTree,
         this.showSyntaxTree.bind(this),
       ),
+      vscode.commands.registerCommand(Command.FormatterHelp, () => {
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            "https://github.com/Shopify/vscode-ruby-lsp#formatting",
+          ),
+        );
+      }),
+      vscode.commands.registerCommand(Command.ToggleFeatures, async () => {
+        // Extract feature descriptions from our package.json
+        const enabledFeaturesProperties =
+          vscode.extensions.getExtension("Shopify.ruby-lsp")!.packageJSON
+            .contributes.configuration.properties["rubyLsp.enabledFeatures"]
+            .properties;
+
+        const descriptions: { [key: string]: string } = {};
+        Object.entries(enabledFeaturesProperties).forEach(
+          ([key, value]: [string, any]) => {
+            descriptions[key] = value.description;
+          },
+        );
+
+        const configuration = vscode.workspace.getConfiguration("rubyLsp");
+        const features: { [key: string]: boolean } =
+          configuration.get("enabledFeatures")!;
+        const allFeatures = Object.keys(features);
+        const options: vscode.QuickPickItem[] = allFeatures.map((label) => {
+          return {
+            label,
+            picked: features[label],
+            description: descriptions[label],
+          };
+        });
+
+        const toggledFeatures = await vscode.window.showQuickPick(options, {
+          canPickMany: true,
+          placeHolder: "Select the features you would like to enable",
+        });
+
+        if (toggledFeatures !== undefined) {
+          // The `picked` property is only used to determine if the checkbox is checked initially. When we receive the
+          // response back from the QuickPick, we need to use inclusion to check if the feature was selected
+          allFeatures.forEach((feature) => {
+            features[feature] = toggledFeatures.some(
+              (selected) => selected.label === feature,
+            );
+          });
+
+          await vscode.workspace
+            .getConfiguration("rubyLsp")
+            .update("enabledFeatures", features, true, true);
+        }
+      }),
+      vscode.commands.registerCommand(Command.ToggleYjit, () => {
+        const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
+        const yjitEnabled = lspConfig.get("yjit");
+        lspConfig.update("yjit", !yjitEnabled, true, true);
+
+        const workspace = this.currentActiveWorkspace();
+
+        if (workspace) {
+          STATUS_EMITTER.fire(workspace);
+        }
+      }),
+      vscode.commands.registerCommand(
+        Command.ToggleExperimentalFeatures,
+        async () => {
+          const lspConfig = vscode.workspace.getConfiguration("rubyLsp");
+          const experimentalFeaturesEnabled = lspConfig.get(
+            "enableExperimentalFeatures",
+          );
+          await lspConfig.update(
+            "enableExperimentalFeatures",
+            !experimentalFeaturesEnabled,
+            true,
+            true,
+          );
+
+          STATUS_EMITTER.fire(this.currentActiveWorkspace());
+        },
+      ),
+      vscode.commands.registerCommand(
+        Command.ServerOptions,
+        async (options: [{ label: string; description: string }]) => {
+          const result = await vscode.window.showQuickPick(options, {
+            placeHolder: "Select server action",
+          });
+
+          if (result !== undefined)
+            await vscode.commands.executeCommand(result.description);
+        },
+      ),
+      vscode.commands.registerCommand(
+        Command.SelectVersionManager,
+        async () => {
+          const configuration = vscode.workspace.getConfiguration("rubyLsp");
+          const options = Object.values(VersionManager);
+          const manager = await vscode.window.showQuickPick(options, {
+            placeHolder: `Current: ${configuration.get("rubyVersionManager")}`,
+          });
+
+          if (manager !== undefined) {
+            configuration.update("rubyVersionManager", manager, true, true);
+          }
+        },
+      ),
     );
+  }
+
+  // Get the current active workspace based on which file is opened in the editor
+  private currentActiveWorkspace(
+    activeEditor = vscode.window.activeTextEditor,
+  ): Workspace | undefined {
+    if (!activeEditor) {
+      return;
+    }
+
+    const document = activeEditor.document;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+
+    if (!workspaceFolder) {
+      return;
+    }
+
+    return this.workspaces.get(workspaceFolder.uri.toString());
   }
 
   // Displays a quick pick to select which workspace to perform an action on. For example, if multiple workspaces exist,

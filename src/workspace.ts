@@ -7,16 +7,22 @@ import { Telemetry } from "./telemetry";
 import { TestController } from "./testController";
 import Client from "./client";
 import { Debugger } from "./debugger";
-import { asyncExec, LOG_CHANNEL } from "./common";
+import {
+  asyncExec,
+  LOG_CHANNEL,
+  WorkspaceInterface,
+  STATUS_EMITTER,
+} from "./common";
 
-export class Workspace {
+export class Workspace implements WorkspaceInterface {
   public lspClient?: Client;
+  public readonly ruby: Ruby;
   private readonly workingDirectory: string;
-  private readonly ruby: Ruby;
   private readonly testController: TestController;
   private readonly debug: Debugger;
   private readonly context: vscode.ExtensionContext;
   private readonly telemetry: Telemetry;
+  #error = false;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -44,14 +50,14 @@ export class Workspace {
     await this.ruby.activateRuby();
 
     if (this.ruby.error) {
-      // this.state = ServerState.Error;
+      this.error = true;
       return;
     }
 
     try {
       await fs.access(this.workingDirectory, fs.constants.W_OK);
     } catch (error: any) {
-      // this.state = ServerState.Error;
+      this.error = true;
 
       vscode.window.showErrorMessage(
         `Directory ${this.workingDirectory} is not writable. The Ruby LSP server needs to be able to create a .ruby-lsp
@@ -64,7 +70,7 @@ export class Workspace {
     try {
       await this.installOrUpdateServer();
     } catch (error: any) {
-      // this.state = ServerState.Error;
+      this.error = true;
       vscode.window.showErrorMessage(
         `Failed to setup the bundle: ${error.message}. \
             See [Troubleshooting](https://github.com/Shopify/vscode-ruby-lsp#troubleshooting) for instructions`,
@@ -89,10 +95,12 @@ export class Workspace {
     );
 
     try {
+      STATUS_EMITTER.fire(this);
       await this.lspClient.start();
       await this.lspClient.performAfterStart();
+      STATUS_EMITTER.fire(this);
     } catch (error: any) {
-      // this.state = ServerState.Error;
+      this.error = true;
       LOG_CHANNEL.error(`Error restarting the server: ${error.message}`);
     }
 
@@ -158,6 +166,15 @@ export class Workspace {
         LOG_CHANNEL.error(`Failed to update global ruby-lsp gem: ${error}`);
       }
     }
+  }
+
+  get error() {
+    return this.#error;
+  }
+
+  private set error(value: boolean) {
+    STATUS_EMITTER.fire(this);
+    this.#error = value;
   }
 
   private registerRestarts(context: vscode.ExtensionContext) {

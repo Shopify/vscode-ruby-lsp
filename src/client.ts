@@ -16,10 +16,9 @@ import {
   State,
 } from "vscode-languageclient/node";
 
-import { asyncExec, LOG_CHANNEL, LSP_NAME } from "./common";
+import { asyncExec, LOG_CHANNEL, LSP_NAME, ClientInterface } from "./common";
 import { Telemetry, RequestEvent } from "./telemetry";
 import { Ruby } from "./ruby";
-import { ClientInterface } from "./status";
 import { TestController } from "./testController";
 
 interface EnabledFeatures {
