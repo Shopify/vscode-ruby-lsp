@@ -51,12 +51,12 @@ documentation](https://shopify.github.io/ruby-lsp/RubyLsp/Requests.html).
 Available commands are listed below and can always be found by searching for the `Ruby LSP` prefix in the command
 palette (Default hotkey: CMD + SHIFT + P).
 
-| Command                              | Description                                            |
-| ------------------------------------ | ------------------------------------------------------ |
-| Ruby LSP: Start                      | Start the Ruby LSP server                              |
-| Ruby LSP: Restart                    | Restart the Ruby LSP server                            |
-| Ruby LSP: Stop                       | Stop the Ruby LSP server                               |
-| Ruby LSP: Update language server gem | Updates the`ruby-lsp` server gem to the latest version |
+| Command                              | Description                                             |
+| ------------------------------------ | ------------------------------------------------------- |
+| Ruby LSP: Start                      | Start the Ruby LSP server                               |
+| Ruby LSP: Restart                    | Restart the Ruby LSP server                             |
+| Ruby LSP: Stop                       | Stop the Ruby LSP server                                |
+| Ruby LSP: Update language server gem | Updates the `ruby-lsp` server gem to the latest version |
 
 ### Snippets
 
