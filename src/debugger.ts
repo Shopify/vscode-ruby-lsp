@@ -8,9 +8,8 @@ import { Ruby } from "./ruby";
 
 export class Debugger
   implements
-    vscode.DebugAdapterDescriptorFactory,
-    vscode.DebugConfigurationProvider
-{
+  vscode.DebugAdapterDescriptorFactory,
+  vscode.DebugConfigurationProvider {
   private readonly workingFolder: string;
   private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
@@ -125,12 +124,12 @@ export class Debugger
     const cmd = "bundle exec rdbg --util=list-socks";
     let sockets: string[] = [];
     try {
-      sockets = execSync(cmd)
+      sockets = execSync(cmd, { cwd: this.workingFolder, env: this.ruby.env })
         .toString()
         .split("\n")
         .filter((socket) => socket.length > 0);
     } catch (error: any) {
-      this.console.append(error.message);
+      this.console.append(`Error listing sockets: ${error.message}`);
     }
     return sockets;
   }
@@ -144,9 +143,9 @@ export class Debugger
       const sockets = this.getSockets();
       if (sockets.length === 0) {
         reject(new Error(`No debuggee processes found.`));
-      } else if (sockets.length === 1)
+      } else if (sockets.length === 1) {
         resolve(new vscode.DebugAdapterNamedPipeServer(sockets[0]));
-      else
+      } else {
         return vscode.window
           .showQuickPick(sockets, {
             placeHolder: "Select a debuggee",
@@ -159,6 +158,7 @@ export class Debugger
               resolve(new vscode.DebugAdapterNamedPipeServer(selectedSocket));
             }
           });
+      }
     });
   }
 
