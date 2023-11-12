@@ -51,9 +51,8 @@ documentation](https://shopify.github.io/ruby-lsp/RubyLsp/Requests.html).
 Available commands are listed below and can always be found by searching for the `Ruby LSP` prefix in the command
 palette (Default hotkey: CMD + SHIFT + P).
 
-
 | Command                              | Description                                            |
-| -------------------------------------- | -------------------------------------------------------- |
+| ------------------------------------ | ------------------------------------------------------ |
 | Ruby LSP: Start                      | Start the Ruby LSP server                              |
 | Ruby LSP: Restart                    | Restart the Ruby LSP server                            |
 | Ruby LSP: Stop                       | Stop the Ruby LSP server                               |
@@ -208,11 +207,11 @@ This command would generate the following configuration:
 
 Install `debug` gem. Verify by running `bundle exec rdbg -v`
 
-Make sure you're running your application with rdbg, e.g. `bundle exec rdbg -O -n -c -- bin/rails server -p 3000`
+Run your application with the debugger attached, so that the extension can connect to it.
 
-You should be able to use vscode debugger attach configuration to connect to your running app
+`bundle exec rdbg -O -n -c -- bin/rails server -p 3000`
 
-For better integrated rails tests support also install `ruby-lsp-rails` gem
+For better integrated rails tests support also install `ruby-lsp-rails` gem.
 
 #### VS Code configurations
 
