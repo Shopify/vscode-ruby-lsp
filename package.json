@@ -2,7 +2,7 @@
   "name": "ruby-lsp",
   "displayName": "Ruby LSP",
   "description": "VS Code plugin for connecting with the Ruby LSP",
-  "version": "0.5.8",
+  "version": "0.6.6",
   "publisher": "Shopify",
   "repository": {
     "type": "git",
@@ -56,8 +56,8 @@
         "category": "Ruby LSP"
       },
       {
-        "command": "rubyLsp.selectRubyVersionManager",
-        "title": "Select Ruby version manager",
+        "command": "rubyLsp.changeRubyVersion",
+        "title": "Change Ruby version",
         "category": "Ruby LSP"
       },
       {
@@ -243,30 +243,6 @@
             }
           }
         },
-        "rubyLsp.rubyVersionManager": {
-          "description": "The Ruby version manager to use",
-          "type": "string",
-          "enum": [
-            "asdf",
-            "auto",
-            "chruby",
-            "none",
-            "rbenv",
-            "rvm",
-            "shadowenv",
-            "custom"
-          ],
-          "default": "auto"
-        },
-        "rubyLsp.customRubyCommand": {
-          "description": "A shell command to activate the right Ruby version or add a custom Ruby bin folder to the PATH. Only used if rubyVersionManager is set to 'custom'",
-          "type": "string"
-        },
-        "rubyLsp.yjit": {
-          "description": "Use YJIT to speed up the Ruby LSP server",
-          "type": "boolean",
-          "default": true
-        },
         "rubyLsp.formatter": {
           "description": "Which tool the Ruby LSP should use for formatting files",
           "type": "string",
@@ -287,6 +263,11 @@
           "description": "The amount of time in seconds to wait for a test to finish before timing out. Only used when running tests from the test explorer",
           "type": "integer",
           "default": 30
+        },
+        "rubyLsp.rubyExecutablePath": {
+          "description": "Specify the path for a Ruby executable to use for the Ruby LSP server on all projects",
+          "type": "string",
+          "default": ""
         },
         "rubyLsp.branch": {
           "description": "Run the Ruby LSP server from the specified branch rather than using the released gem. Only supported if not using bundleGemfile",
