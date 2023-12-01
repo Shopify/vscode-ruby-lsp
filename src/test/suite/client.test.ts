@@ -3,11 +3,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-import { afterEach } from "mocha";
 import * as vscode from "vscode";
 import { State } from "vscode-languageclient/node";
 
-import { Ruby, VersionManager } from "../../ruby";
+import { Ruby } from "../../ruby";
 import { Telemetry, TelemetryApi, TelemetryEvent } from "../../telemetry";
 import Client from "../../client";
 import { asyncExec } from "../../common";
@@ -26,31 +25,19 @@ class FakeApi implements TelemetryApi {
 }
 
 suite("Client", () => {
-  let client: Client | undefined;
-  const managerConfig = vscode.workspace.getConfiguration("rubyLsp");
-  const currentManager = managerConfig.get("rubyVersionManager");
-
-  afterEach(async () => {
-    if (client && client.state === State.Running) {
-      await client.stop();
-      await client.dispose();
-    }
-
-    managerConfig.update("rubyVersionManager", currentManager, true, true);
-  });
+  const context = {
+    extensionMode: vscode.ExtensionMode.Test,
+    subscriptions: [],
+    workspaceState: {
+      get: (_name: string) => undefined,
+      update: (_name: string, _value: any) => Promise.resolve(),
+    },
+  } as unknown as vscode.ExtensionContext;
 
   test("Starting up the server succeeds", async () => {
-    // eslint-disable-next-line no-process-env
-    if (process.env.CI) {
-      await managerConfig.update(
-        "rubyVersionManager",
-        VersionManager.None,
-        true,
-        true,
-      );
-    }
-
-    const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+    const tmpPath = fs.mkdtempSync(
+      path.join(os.tmpdir(), "ruby-lsp-test-client"),
+    );
     const workspaceFolder: vscode.WorkspaceFolder = {
       uri: vscode.Uri.from({ scheme: "file", path: tmpPath }),
       name: path.basename(tmpPath),
@@ -58,17 +45,13 @@ suite("Client", () => {
     };
     fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.2.2");
 
-    const context = {
-      extensionMode: vscode.ExtensionMode.Test,
-      subscriptions: [],
-      workspaceState: {
-        get: (_name: string) => undefined,
-        update: (_name: string, _value: any) => Promise.resolve(),
-      },
-    } as unknown as vscode.ExtensionContext;
+    const ruby = new Ruby(workspaceFolder, context);
 
-    const ruby = new Ruby(context, workspaceFolder);
-    await ruby.activateRuby();
+    try {
+      await ruby.activate();
+    } catch (error: any) {
+      assert.fail(`Failed to activate Ruby ${error.message}`);
+    }
 
     await asyncExec("gem install ruby-lsp", {
       cwd: workspaceFolder.uri.fsPath,
@@ -95,7 +78,7 @@ suite("Client", () => {
       await client.stop();
       await client.dispose();
     } catch (error: any) {
-      assert.fail(`Failed to stop server: ${error.message}`);
+      assert.fail(`Failed to stop server ${error.message}`);
     }
 
     try {
