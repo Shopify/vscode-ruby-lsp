@@ -165,6 +165,7 @@ gem "rubocop"
 >
 > Take in mind that formatters, linters and their extensions should be included in the custom gemfile; you might need to add more gems than the ones shown above.
 > e.g: If you are using rubocop, you would also need to add them:
+
 ```ruby
 gem "rubocop-packaging"
 gem "rubocop-performance"
