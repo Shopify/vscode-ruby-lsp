@@ -253,7 +253,7 @@ workspace configuration is following the guidelines.
 
 #### Monorepos containing multiple workspaces
 
-A common setup is using a monorepo with directories for sub projects. For example:
+A common setup is using a monorepo with directories for sub-projects. For example:
 
 ```
 my_project/
@@ -261,7 +261,7 @@ my_project/
   server/
 ```
 
-This situation also falls under the category of multi-root workspaces. In this context, client and server are distinct
+This situation also falls under the category of multi-root workspaces. In this context, `client` and `server` are distinct
 workspaces. The Ruby LSP supports this use case out of the box as long as `my_project` contains configuration that
 follows [VS Code's guidelines](https://code.visualstudio.com/docs/editor/workspaces#_multiroot-workspaces) for
 multi-root workspaces.
