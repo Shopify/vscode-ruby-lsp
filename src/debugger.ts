@@ -9,8 +9,9 @@ import { Workspace } from "./workspace";
 
 export class Debugger
   implements
-  vscode.DebugAdapterDescriptorFactory,
-  vscode.DebugConfigurationProvider {
+    vscode.DebugAdapterDescriptorFactory,
+    vscode.DebugConfigurationProvider
+{
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
   private readonly currentActiveWorkspace: () => Workspace | undefined;
