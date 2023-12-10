@@ -11,8 +11,10 @@ suite("Ruby environment activation", () => {
   let ruby: Ruby;
 
   test("Activate fetches Ruby information when outside of Ruby LSP", async () => {
-    // eslint-disable-next-line no-process-env
-    process.env.SHELL = "/bin/bash";
+    if (os.platform() !== "win32") {
+      // eslint-disable-next-line no-process-env
+      process.env.SHELL = "/bin/bash";
+    }
 
     const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
     fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.2.2");
@@ -21,21 +23,19 @@ suite("Ruby environment activation", () => {
       extensionMode: vscode.ExtensionMode.Test,
     } as vscode.ExtensionContext;
 
-    ruby = new Ruby(
-      context,
-      vscode.window.createOutputChannel("Ruby LSP"),
-      tmpPath,
-    );
+    ruby = new Ruby(context, {
+      uri: { fsPath: tmpPath },
+    } as vscode.WorkspaceFolder);
     await ruby.activateRuby(
       // eslint-disable-next-line no-process-env
       process.env.CI ? VersionManager.None : VersionManager.Chruby,
     );
 
     assert.ok(ruby.rubyVersion, "Expected Ruby version to be set");
-    assert.strictEqual(
+    assert.notStrictEqual(
       ruby.supportsYjit,
-      true,
-      "Expected YJIT support to be enabled",
+      undefined,
+      "Expected YJIT support to be set to true or false",
     );
 
     fs.rmSync(tmpPath, { recursive: true, force: true });

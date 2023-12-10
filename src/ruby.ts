@@ -1,11 +1,9 @@
-import { exec } from "child_process";
-import { promisify } from "util";
 import path from "path";
-import fs from "fs";
+import fs from "fs/promises";
 
 import * as vscode from "vscode";
 
-const asyncExec = promisify(exec);
+import { asyncExec, pathExists, LOG_CHANNEL, RubyInterface } from "./common";
 
 export enum VersionManager {
   Asdf = "asdf",
@@ -18,29 +16,26 @@ export enum VersionManager {
   Custom = "custom",
 }
 
-export class Ruby {
+export class Ruby implements RubyInterface {
   public rubyVersion?: string;
   public yjitEnabled?: boolean;
   public supportsYjit?: boolean;
-  private readonly workingFolder: string;
+  private readonly workingFolderPath: string;
   #versionManager?: VersionManager;
   // eslint-disable-next-line no-process-env
-  private readonly shell = process.env.SHELL;
+  private readonly shell = process.env.SHELL?.replace(/(\s+)/g, "\\$1");
   private _env: NodeJS.ProcessEnv = {};
   private _error = false;
   private readonly context: vscode.ExtensionContext;
   private readonly customBundleGemfile?: string;
   private readonly cwd: string;
-  private readonly outputChannel: vscode.OutputChannel;
 
   constructor(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    workingFolder: vscode.WorkspaceFolder,
   ) {
     this.context = context;
-    this.workingFolder = workingFolder;
-    this.outputChannel = outputChannel;
+    this.workingFolderPath = workingFolder.uri.fsPath;
 
     const customBundleGemfile: string = vscode.workspace
       .getConfiguration("rubyLsp")
@@ -49,12 +44,12 @@ export class Ruby {
     if (customBundleGemfile.length > 0) {
       this.customBundleGemfile = path.isAbsolute(customBundleGemfile)
         ? customBundleGemfile
-        : path.resolve(path.join(this.workingFolder, customBundleGemfile));
+        : path.resolve(path.join(this.workingFolderPath, customBundleGemfile));
     }
 
     this.cwd = this.customBundleGemfile
       ? path.dirname(this.customBundleGemfile)
-      : this.workingFolder;
+      : this.workingFolderPath;
   }
 
   get versionManager() {
@@ -83,9 +78,7 @@ export class Ruby {
     // If the version manager is auto, discover the actual manager before trying to activate anything
     if (this.versionManager === VersionManager.Auto) {
       await this.discoverVersionManager();
-      this.outputChannel.appendLine(
-        `Ruby LSP> Discovered version manager ${this.versionManager}`,
-      );
+      LOG_CHANNEL.info(`Discovered version manager ${this.versionManager}`);
     }
 
     try {
@@ -113,9 +106,9 @@ export class Ruby {
           break;
       }
 
-      await this.fetchRubyInfo();
+      this.fetchRubyVersionInfo();
       this.deleteGcEnvironmentVariables();
-      this.setupBundlePath();
+      await this.setupBundlePath();
       this._error = false;
     } catch (error: any) {
       this._error = true;
@@ -133,66 +126,84 @@ export class Ruby {
   }
 
   private async activateShadowenv() {
-    if (!fs.existsSync(path.join(this.workingFolder, ".shadowenv.d"))) {
+    if (
+      !(await pathExists(path.join(this.workingFolderPath, ".shadowenv.d")))
+    ) {
       throw new Error(
         "The Ruby LSP version manager is configured to be shadowenv, \
         but no .shadowenv.d directory was found in the workspace",
       );
     }
 
-    const result = await asyncExec("shadowenv hook --json", { cwd: this.cwd });
+    const result = await asyncExec("shadowenv hook --json 1>&2", {
+      cwd: this.cwd,
+    });
 
-    if (result.stdout.trim() === "") {
-      result.stdout = "{ }";
+    if (result.stderr.trim() === "") {
+      result.stderr = "{ }";
     }
     // eslint-disable-next-line no-process-env
-    const env = { ...process.env, ...JSON.parse(result.stdout).exported };
+    const env = { ...process.env, ...JSON.parse(result.stderr).exported };
 
     // The only reason we set the process environment here is to allow other extensions that don't perform activation
     // work properly
     // eslint-disable-next-line no-process-env
     process.env = env;
     this._env = env;
+
+    // Get the Ruby version and YJIT support. Shadowenv is the only manager where this is separate from activation
+    const rubyInfo = await asyncExec(
+      "ruby -e 'STDERR.print(\"#{RUBY_VERSION},#{defined?(RubyVM::YJIT)}\")'",
+      { env: this._env, cwd: this.cwd },
+    );
+
+    const [rubyVersion, yjitIsDefined] = rubyInfo.stderr.trim().split(",");
+    this.rubyVersion = rubyVersion;
+    this.yjitEnabled = yjitIsDefined === "constant";
   }
 
   private async activateChruby() {
-    const rubyVersion = this.readRubyVersion();
+    const rubyVersion = await this.readRubyVersion();
     await this.activate(`chruby "${rubyVersion}" && ruby`);
   }
 
   private async activate(ruby: string) {
     let command = this.shell ? `${this.shell} -ic '` : "";
-    command += `${ruby} -rjson -e "printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE}, JSON.dump(ENV.to_h))"`;
+
+    // The Ruby activation script is intentionally written as an array that gets joined into a one liner because some
+    // terminals cannot handle line breaks. Do not switch this to a multiline string or that will break activation for
+    // those terminals
+    const script = [
+      "STDERR.printf(%{RUBY_ENV_ACTIVATE%sRUBY_ENV_ACTIVATE}, ",
+      "JSON.dump({ env: ENV.to_h, ruby_version: RUBY_VERSION, yjit: defined?(RubyVM::YJIT) }))",
+    ].join("");
+
+    command += `${ruby} -rjson -e "${script}"`;
 
     if (this.shell) {
       command += "'";
     }
 
-    this.outputChannel.appendLine(
-      `Ruby LSP> Trying to activate Ruby environment with command: ${command} inside directory: ${this.cwd}`,
+    LOG_CHANNEL.info(
+      `Trying to activate Ruby environment with command: ${command} inside directory: ${this.cwd}`,
     );
 
     const result = await asyncExec(command, { cwd: this.cwd });
-
-    const envJson = /RUBY_ENV_ACTIVATE(.*)RUBY_ENV_ACTIVATE/.exec(
-      result.stdout,
+    const rubyInfoJson = /RUBY_ENV_ACTIVATE(.*)RUBY_ENV_ACTIVATE/.exec(
+      result.stderr,
     )![1];
 
-    this._env = JSON.parse(envJson);
+    const rubyInfo = JSON.parse(rubyInfoJson);
+
+    this._env = rubyInfo.env;
+    this.rubyVersion = rubyInfo.ruby_version;
+    this.yjitEnabled = rubyInfo.yjit === "constant";
   }
 
-  private async fetchRubyInfo() {
-    const rubyInfo = await asyncExec(
-      "ruby -e 'puts \"#{RUBY_VERSION},#{defined?(RubyVM::YJIT)}\"'",
-      { env: this._env, cwd: this.cwd },
-    );
-
-    const [rubyVersion, yjitIsDefined] = rubyInfo.stdout.trim().split(",");
-
-    this.rubyVersion = rubyVersion;
-    this.yjitEnabled = yjitIsDefined === "constant";
-
-    const [major, minor, _patch] = this.rubyVersion.split(".").map(Number);
+  // Fetch information related to the Ruby version. This can only be invoked after activation, so that `rubyVersion` is
+  // set
+  private fetchRubyVersionInfo() {
+    const [major, minor, _patch] = this.rubyVersion!.split(".").map(Number);
 
     if (major < 3) {
       throw new Error(
@@ -204,7 +215,11 @@ export class Ruby {
     this.supportsYjit =
       this.yjitEnabled && (major > 3 || (major === 3 && minor >= 2));
 
-    const useYjit = vscode.workspace.getConfiguration("rubyLsp").get("yjit");
+    // Starting with Ruby 3.3 the server enables YJIT itself
+    const useYjit =
+      vscode.workspace.getConfiguration("rubyLsp").get("yjit") &&
+      major === 3 &&
+      minor === 2;
 
     if (this.supportsYjit && useYjit) {
       // RUBYOPT may be empty or it may contain bundler paths. In the second case, we must concat to avoid accidentally
@@ -225,14 +240,14 @@ export class Ruby {
     });
   }
 
-  private setupBundlePath() {
+  private async setupBundlePath() {
     // Some users like to define a completely separate Gemfile for development tools. We allow them to use
     // `rubyLsp.bundleGemfile` to configure that and need to inject it into the environment
     if (!this.customBundleGemfile) {
       return;
     }
 
-    if (!fs.existsSync(this.customBundleGemfile)) {
+    if (!(await pathExists(this.customBundleGemfile))) {
       throw new Error(
         `The configured bundle gemfile ${this.customBundleGemfile} does not exist`,
       );
@@ -241,14 +256,14 @@ export class Ruby {
     this._env.BUNDLE_GEMFILE = this.customBundleGemfile;
   }
 
-  private readRubyVersion() {
+  private async readRubyVersion() {
     let dir = this.cwd;
 
-    while (fs.existsSync(dir)) {
+    while (await pathExists(dir)) {
       const versionFile = path.join(dir, ".ruby-version");
 
-      if (fs.existsSync(versionFile)) {
-        const version = fs.readFileSync(versionFile, "utf8");
+      if (await pathExists(versionFile)) {
+        const version = await fs.readFile(versionFile, "utf8");
         const trimmedVersion = version.trim();
 
         if (trimmedVersion !== "") {
@@ -273,7 +288,7 @@ export class Ruby {
   private async discoverVersionManager() {
     // For shadowenv, it wouldn't be enough to check for the executable's existence. We need to check if the project has
     // created a .shadowenv.d folder
-    if (fs.existsSync(path.join(this.workingFolder, ".shadowenv.d"))) {
+    if (await pathExists(path.join(this.workingFolderPath, ".shadowenv.d"))) {
       this.versionManager = VersionManager.Shadowenv;
       return;
     }
@@ -307,11 +322,11 @@ export class Ruby {
         command += "'";
       }
 
-      this.outputChannel.appendLine(
-        `Ruby LSP> Checking if ${tool} is available on the path with command: ${command}`,
+      LOG_CHANNEL.info(
+        `Checking if ${tool} is available on the path with command: ${command}`,
       );
 
-      await asyncExec(command, { cwd: this.workingFolder });
+      await asyncExec(command, { cwd: this.workingFolderPath, timeout: 1000 });
       return true;
     } catch {
       return false;

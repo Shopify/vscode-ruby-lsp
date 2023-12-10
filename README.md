@@ -46,6 +46,9 @@ Adding method support for definition, completion, hover and workspace symbol is 
 See complete information about features in the [ruby-lsp server
 documentation](https://shopify.github.io/ruby-lsp/RubyLsp/Requests.html).
 
+If you experience issues using the extension, please see the [troubleshooting
+guide](https://github.com/Shopify/vscode-ruby-lsp/blob/main/TROUBLESHOOTING.md).
+
 ### Commands
 
 Available commands are listed below and can always be found by searching for the `Ruby LSP` prefix in the command
@@ -67,10 +70,13 @@ test boilerplates. Find the full list [here](https://github.com/Shopify/vscode-r
 
 #### Enable or disable features
 
-The Ruby LSP has all its features enabled by default, but disabling specific features is supported. To do so, open the
+The Ruby LSP allows disabling specific features. To do so, open the
 language status center right next to the language mode Ruby and select `Manage` right next to enabled features.
 
 ![Ruby LSP status center](extras/ruby_lsp_status_center.png)
+
+It's also possible to configure with more granularity code lens and inlay hint features, see the [Ruby LSP server
+documentation](https://shopify.github.io/ruby-lsp/RubyLsp/Requests.html).
 
 #### Ruby version managers
 
@@ -161,6 +167,19 @@ gem "ruby-lsp"
 gem "rubocop"
 ```
 
+> [!NOTE]
+>
+> Take in mind that formatters, linters and their extensions should be included in the custom gemfile; you might need to add more gems than the ones shown above.
+> e.g: If you are using rubocop, you would also need to add them:
+
+```ruby
+gem "rubocop-packaging"
+gem "rubocop-performance"
+gem "rubocop-rspec"
+gem "rubocop-shopify"
+gem "rubocop-thread_safety"
+```
+
 Run `bundle install` inside that directory to generate a lockfile. After the directory contains the custom `Gemfile` and
 the version manager configuration, use the following configuration in VS Code to point the Ruby LSP to that `Gemfile`.
 
@@ -239,45 +258,30 @@ These are the settings that may impact the Ruby LSP's behavior and their explana
 }
 ```
 
-## Troubleshooting
+### Multi-root workspaces
 
-To verify if the Ruby LSP has been activated properly, you can
+The Ruby LSP supports multi-root workspaces by spawning a separate language server for each one of them. This strategy
+is preferred over a single language server that supports multiple workspaces because each workspace could be using a
+different Ruby version and completely different gems - which would be impossible to support in a single Ruby process.
 
-- Check if any of the features are working, such as format on save or file outline
-- Open VS Code's `Output` panel, select the `Ruby LSP` channel and verify if `Ruby LSP is ready` was printed
+Please see the [VS Code workspaces documentation](https://code.visualstudio.com/docs/editor/workspaces) on how to
+configure the editor for multi-root workspaces. The Ruby LSP should work properly out of the box as long as the
+workspace configuration is following the guidelines.
 
-If the Ruby LSP is failing to start, follow these steps
+#### Monorepos containing multiple workspaces
 
-1. Double-check that the right [Ruby version manager](#ruby-version-managers) is configured
-2. Double-check that all of the requirements for the version manager are present. For example, `chruby` requires a
-   `.ruby-version` file to exist in the project's top level
-3. If using v0.2.0 of this extension or above, double-check that the `ruby-lsp` gem is not present in the project's main
-   `Gemfile`
-4. Reload the VS Code window by opening the command palette and selecting `Developer: Reload window`
+A common setup is using a monorepo with directories for sub-projects. For example:
 
-If these steps don't fix the initialization issue, attempt to manually install gems using the Ruby LSP's custom
-`Gemfile` by running.
-
-```shell
-BUNDLE_GEMFILE=/path/to/your/project/.ruby-lsp/Gemfile bundle install
+```
+my_project/
+  client/
+  server/
 ```
 
-If after these steps the Ruby LSP is still not initializing properly, please report the issue
-[here](https://github.com/Shopify/vscode-ruby-lsp/issues/new?labels=bug&template=bug_template.yml).
-
-## Migrating from bundle
-
-**Note**: The following applies if migrating from a version earlier than v0.2.0.
-
-If you previously included the `ruby-lsp` gem in the bundle (as part of the project's `Gemfile` or `gemspec`) then
-follow these steps to migrate to newer versions of the Ruby LSP - for which the gem no longer needs to be added to the
-bundle.
-
-1. Warn developers working on the project that they'll need to update to the latest Ruby LSP extension (older versions
-   require the `ruby-lsp` gem in the bundle and therefore won't work if it is removed)
-2. Remove the `ruby-lsp` from the bundle (remove the entry from the project's `Gemfile`)
-3. Run bundle to make sure `Gemfile.lock` is updated
-4. [Restart](#commands) the Ruby LSP extension or restart VS Code to allow Ruby LSP to use the new setup
+This situation also falls under the category of multi-root workspaces. In this context, `client` and `server` are distinct
+workspaces. The Ruby LSP supports this use case out of the box as long as `my_project` contains configuration that
+follows [VS Code's guidelines](https://code.visualstudio.com/docs/editor/workspaces#_multiroot-workspaces) for
+multi-root workspaces.
 
 ## Telemetry
 

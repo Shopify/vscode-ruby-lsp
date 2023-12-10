@@ -4,34 +4,27 @@ import { ChildProcessWithoutNullStreams, spawn, execSync } from "child_process";
 
 import * as vscode from "vscode";
 
-import { Ruby } from "./ruby";
+import { LOG_CHANNEL } from "./common";
+import { Workspace } from "./workspace";
 
 export class Debugger
   implements
   vscode.DebugAdapterDescriptorFactory,
   vscode.DebugConfigurationProvider {
-  private readonly workingFolder: string;
-  private readonly ruby: Ruby;
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
-  private readonly subscriptions: vscode.Disposable[];
-  private readonly outputChannel: vscode.OutputChannel;
+  private readonly currentActiveWorkspace: () => Workspace | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
-    ruby: Ruby,
-    outputChannel: vscode.OutputChannel,
-    workingFolder = vscode.workspace.workspaceFolders![0].uri.fsPath,
+    currentActiveWorkspace: () => Workspace | undefined,
   ) {
-    this.ruby = ruby;
-    this.outputChannel = outputChannel;
-    this.subscriptions = [
+    this.currentActiveWorkspace = currentActiveWorkspace;
+
+    context.subscriptions.push(
       vscode.debug.registerDebugConfigurationProvider("ruby_lsp", this),
       vscode.debug.registerDebugAdapterDescriptorFactory("ruby_lsp", this),
-    ];
-    this.workingFolder = workingFolder;
-
-    context.subscriptions.push(...this.subscriptions);
+    );
   }
 
   // This is where we start the debuggee process. We currently support launching with the debugger or attaching to a
@@ -90,21 +83,30 @@ export class Debugger
     debugConfiguration: vscode.DebugConfiguration,
     _token?: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.DebugConfiguration> {
+    const workspace = this.currentActiveWorkspace();
+
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+
     if (debugConfiguration.env) {
       // If the user has their own debug launch configurations, we still need to inject the Ruby environment
       debugConfiguration.env = Object.assign(
         debugConfiguration.env,
-        this.ruby.env,
+        workspace.ruby.env,
       );
     } else {
-      debugConfiguration.env = this.ruby.env;
+      debugConfiguration.env = workspace.ruby.env;
     }
 
-    const customGemfilePath = path.join(
-      this.workingFolder,
-      ".ruby-lsp",
-      "Gemfile",
-    );
+    const workspacePath = workspace.workspaceFolder.uri.fsPath;
+
+    let customGemfilePath = path.join(workspacePath, ".ruby-lsp", "Gemfile");
+    if (fs.existsSync(customGemfilePath)) {
+      debugConfiguration.env.BUNDLE_GEMFILE = customGemfilePath;
+    }
+
+    customGemfilePath = path.join(workspacePath, ".ruby-lsp", "gems.rb");
     if (fs.existsSync(customGemfilePath)) {
       debugConfiguration.env.BUNDLE_GEMFILE = customGemfilePath;
     }
@@ -112,12 +114,26 @@ export class Debugger
     return debugConfiguration;
   }
 
+  // If the extension is deactivating, we need to ensure the debug process is terminated or else it may continue running
+  // in the background
   dispose() {
     if (this.debugProcess) {
       this.debugProcess.kill("SIGTERM");
     }
+  }
 
-    this.subscriptions.forEach((subscription) => subscription.dispose());
+  private getSockets(): string[] {
+    const cmd = "bundle exec rdbg --util=list-socks";
+    let sockets: string[] = [];
+    try {
+      sockets = execSync(cmd, { cwd: this.workingFolder, env: this.ruby.env })
+        .toString()
+        .split("\n")
+        .filter((socket) => socket.length > 0);
+    } catch (error: any) {
+      this.console.append(`Error listing sockets: ${error.message}`);
+    }
+    return sockets;
   }
 
   private getSockets(): string[] {
@@ -167,6 +183,14 @@ export class Debugger
   ): Promise<vscode.DebugAdapterDescriptor | undefined> {
     let initialMessage = "";
     let initialized = false;
+
+    const workspace = this.currentActiveWorkspace();
+
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+
+    const cwd = workspace.workspaceFolder.uri.fsPath;
     const configuration = session.configuration;
 
     return new Promise((resolve, reject) => {
@@ -179,20 +203,14 @@ export class Debugger
         configuration.program,
       ];
 
-      this.outputChannel.appendLine(
-        `Ruby LSP> Spawning debugger in directory ${this.workingFolder}`,
-      );
-      this.outputChannel.appendLine(
-        `Ruby LSP>   Command bundle ${args.join(" ")}`,
-      );
-      this.outputChannel.appendLine(
-        `Ruby LSP>   Environment ${JSON.stringify(configuration.env)}`,
-      );
+      LOG_CHANNEL.info(`Spawning debugger in directory ${cwd}`);
+      LOG_CHANNEL.info(`   Command bundle ${args.join(" ")}`);
+      LOG_CHANNEL.info(`   Environment ${JSON.stringify(configuration.env)}`);
 
       this.debugProcess = spawn("bundle", args, {
         shell: true,
         env: configuration.env,
-        cwd: this.workingFolder,
+        cwd,
       });
 
       this.debugProcess.stderr.on("data", (data) => {
@@ -239,7 +257,7 @@ export class Debugger
         if (code) {
           const message = `Debugger exited with status ${code}. Check the output channel for more information.`;
           this.console.append(message);
-          this.outputChannel.show();
+          LOG_CHANNEL.show();
           reject(new Error(message));
         }
       });
