@@ -124,23 +124,16 @@ export class Debugger
 
   private getSockets(): string[] {
     const cmd = "bundle exec rdbg --util=list-socks";
-    let sockets: string[] = [];
-    try {
-      sockets = execSync(cmd, { cwd: this.workingFolder, env: this.ruby.env })
-        .toString()
-        .split("\n")
-        .filter((socket) => socket.length > 0);
-    } catch (error: any) {
-      this.console.append(`Error listing sockets: ${error.message}`);
+    const workspace = this.currentActiveWorkspace();
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
     }
-    return sockets;
-  }
-
-  private getSockets(): string[] {
-    const cmd = "bundle exec rdbg --util=list-socks";
     let sockets: string[] = [];
     try {
-      sockets = execSync(cmd, { cwd: this.workingFolder, env: this.ruby.env })
+      sockets = execSync(cmd, {
+        cwd: workspace.workspaceFolder.uri.fsPath,
+        env: workspace.ruby.env,
+      })
         .toString()
         .split("\n")
         .filter((socket) => socket.length > 0);
