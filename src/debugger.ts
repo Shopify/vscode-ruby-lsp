@@ -154,7 +154,7 @@ export class Debugger
       if (sockets.length === 0) {
         reject(new Error(`No debuggee processes found.`));
       } else if (sockets.length === 1) {
-        resolve(new vscode.DebugAdapterNamedPipeServer(sockets[0]));
+        return resolve(new vscode.DebugAdapterNamedPipeServer(sockets[0]));
       } else {
         return vscode.window
           .showQuickPick(sockets, {
