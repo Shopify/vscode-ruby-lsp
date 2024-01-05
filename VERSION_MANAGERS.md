@@ -28,7 +28,7 @@ command that will activate the right Ruby version or add the Ruby `bin` folder t
 
 ### mise (formerly rtx)
 
-[mise](https://github.com/jdxcode/mise) is a Rust clone compatible with asdf. You can use it by adding the following
+[mise](https://github.com/jdx/mise) (formerly `rtx`) is a Rust clone compatible with asdf. You can use it by adding the following
 snippet to your user configuration JSON
 
 ```json
