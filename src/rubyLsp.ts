@@ -117,18 +117,21 @@ export class RubyLsp {
     // If one of the workspaces does not contain a lockfile, then we don't try to start a language server. If the user
     // ends up opening a Ruby file inside that workspace, then we lazily activate the workspace. These need to match our
     // `workspaceContains` activation events in package.json
-    if (
-      customBundleGemfile.length === 0 &&
-      !(await pathExists(path.join(workspaceDir, "Gemfile.lock"))) &&
-      !(await pathExists(path.join(workspaceDir, "gems.locked"))) &&
-      !this.context.globalState.get("rubyLsp.disableMultirootLockfileWarning")
-    ) {
+    var startWorkspace = customBundleGemfile.length !== 0 ||
+      await pathExists(path.join(workspaceDir, "Gemfile.lock")) ||
+      await pathExists(path.join(workspaceDir, "gems.locked"));
+
+    if (!startWorkspace && !this.context.globalState.get("rubyLsp.disableMultirootLockfileWarning")) {
       const answer = await vscode.window.showWarningMessage(
         `Tried to activate the Ruby LSP in ${workspaceDir}, but no lockfile was found. Are you using a monorepo setup?`,
         "No - launch without bundle",
         "Yes - see multi-root workspace docs",
         "Don't show again",
       );
+
+      if (answer === "No - launch without bundle") {
+        startWorkspace = true;
+      }
 
       if (answer === "Yes - see multi-root workspace docs") {
         vscode.env.openExternal(
@@ -144,19 +147,23 @@ export class RubyLsp {
           "rubyLsp.disableMultirootLockfileWarning",
           true,
         );
+        return;
       }
     }
 
-    const workspace = new Workspace(
-      this.context,
-      workspaceFolder,
-      this.telemetry,
-      this.testController.createTestItems.bind(this.testController),
-    );
-    this.workspaces.set(workspaceFolder.uri.toString(), workspace);
+    // Start the workspace only if a lockfile exists or if user chooses to continue without one
+    if (startWorkspace) {
+      const workspace = new Workspace(
+        this.context,
+        workspaceFolder,
+        this.telemetry,
+        this.testController.createTestItems.bind(this.testController),
+      );
+      this.workspaces.set(workspaceFolder.uri.toString(), workspace);
 
-    await workspace.start();
-    this.context.subscriptions.push(workspace);
+      await workspace.start();
+      this.context.subscriptions.push(workspace);
+    }
   }
 
   // Registers all extension commands. Commands can only be registered once, so this happens in the constructor. For
