@@ -168,7 +168,7 @@ export class Ruby implements RubyInterface {
   }
 
   private async activate(ruby: string) {
-    let command = this.shell ? `${this.shell} -ic '` : "";
+    let command = this.shell ? `${this.shell} -i -c '` : "";
 
     // The Ruby activation script is intentionally written as an array that gets joined into a one liner because some
     // terminals cannot handle line breaks. Do not switch this to a multiline string or that will break activation for
