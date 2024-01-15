@@ -315,7 +315,7 @@ export class Ruby implements RubyInterface {
 
   private async toolExists(tool: string) {
     try {
-      let command = this.shell ? `${this.shell} -ic '` : "";
+      let command = this.shell ? `${this.shell} -i -c '` : "";
       command += `${tool} --version`;
 
       if (this.shell) {
