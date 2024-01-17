@@ -15,12 +15,12 @@ export class Debugger
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
   private readonly workspaceResolver: (
-    uri: vscode.Uri,
+    uri: vscode.Uri | undefined,
   ) => Workspace | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
-    workspaceResolver: (uri: vscode.Uri) => Workspace | undefined,
+    workspaceResolver: (uri: vscode.Uri | undefined) => Workspace | undefined,
   ) {
     this.workspaceResolver = workspaceResolver;
 
@@ -86,14 +86,12 @@ export class Debugger
     debugConfiguration: vscode.DebugConfiguration,
     _token?: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.DebugConfiguration> {
-    if (!folder) {
-      throw new Error("Debugging requires a workspace folder to be opened");
-    }
-
-    const workspace = this.workspaceResolver(folder.uri);
+    const workspace = this.workspaceResolver(folder?.uri);
 
     if (!workspace) {
-      throw new Error(`Couldn't find workspace ${folder.name}`);
+      throw new Error(
+        `Couldn't find a workspace for URI: ${folder?.uri} or editor: ${vscode.window.activeTextEditor}`,
+      );
     }
 
     if (debugConfiguration.env) {
@@ -105,6 +103,8 @@ export class Debugger
     } else {
       debugConfiguration.env = workspace.ruby.env;
     }
+
+    debugConfiguration.targetFolder = workspace.workspaceFolder;
 
     const workspacePath = workspace.workspaceFolder.uri.fsPath;
 
@@ -186,13 +186,9 @@ export class Debugger
     let initialMessage = "";
     let initialized = false;
 
-    const workspaceFolder = session.workspaceFolder;
-    if (!workspaceFolder) {
-      throw new Error("Debugging requires a workspace folder to be opened");
-    }
-
-    const cwd = workspaceFolder.uri.fsPath;
     const configuration = session.configuration;
+    const workspaceFolder: vscode.WorkspaceFolder = configuration.targetFolder;
+    const cwd = workspaceFolder.uri.fsPath;
 
     return new Promise((resolve, reject) => {
       const args = [

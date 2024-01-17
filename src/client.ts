@@ -14,9 +14,10 @@ import {
   MessageSignature,
 } from "vscode-languageclient/node";
 
-import { LOG_CHANNEL, LSP_NAME, ClientInterface } from "./common";
+import { LSP_NAME, ClientInterface } from "./common";
 import { Telemetry, RequestEvent } from "./telemetry";
 import { Ruby } from "./ruby";
+import { WorkspaceChannel } from "./workspaceChannel";
 
 type EnabledFeatures = Record<string, boolean>;
 
@@ -89,6 +90,7 @@ function getLspExecutables(
 function collectClientOptions(
   configuration: vscode.WorkspaceConfiguration,
   workspaceFolder: vscode.WorkspaceFolder,
+  outputChannel: WorkspaceChannel,
 ): LanguageClientOptions {
   const pullOn: "change" | "save" | "both" =
     configuration.get("pullDiagnosticsOn")!;
@@ -100,14 +102,13 @@ function collectClientOptions(
 
   const features: EnabledFeatures = configuration.get("enabledFeatures")!;
   const enabledFeatures = Object.keys(features).filter((key) => features[key]);
+  const pattern = `${path.join(workspaceFolder.uri.fsPath, "**", "*")}`;
 
   return {
-    documentSelector: [
-      { language: "ruby", pattern: `${workspaceFolder.uri.fsPath}/**/*` },
-    ],
+    documentSelector: [{ language: "ruby", pattern }],
     workspaceFolder,
     diagnosticCollectionName: LSP_NAME,
-    outputChannel: LOG_CHANNEL,
+    outputChannel,
     revealOutputChannelOn: RevealOutputChannelOn.Never,
     diagnosticPullOptions,
     initializationOptions: {
@@ -139,6 +140,7 @@ export default class Client extends LanguageClient implements ClientInterface {
     ruby: Ruby,
     createTestItems: (response: CodeLens[]) => void,
     workspaceFolder: vscode.WorkspaceFolder,
+    outputChannel: WorkspaceChannel,
   ) {
     super(
       LSP_NAME,
@@ -146,6 +148,7 @@ export default class Client extends LanguageClient implements ClientInterface {
       collectClientOptions(
         vscode.workspace.getConfiguration("rubyLsp"),
         workspaceFolder,
+        outputChannel,
       ),
     );
 

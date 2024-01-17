@@ -3,7 +3,8 @@ import fs from "fs/promises";
 
 import * as vscode from "vscode";
 
-import { asyncExec, pathExists, LOG_CHANNEL, RubyInterface } from "./common";
+import { asyncExec, pathExists, RubyInterface } from "./common";
+import { WorkspaceChannel } from "./workspaceChannel";
 
 export enum VersionManager {
   Asdf = "asdf",
@@ -29,13 +30,16 @@ export class Ruby implements RubyInterface {
   private readonly context: vscode.ExtensionContext;
   private readonly customBundleGemfile?: string;
   private readonly cwd: string;
+  private readonly outputChannel: WorkspaceChannel;
 
   constructor(
     context: vscode.ExtensionContext,
     workingFolder: vscode.WorkspaceFolder,
+    outputChannel: WorkspaceChannel,
   ) {
     this.context = context;
     this.workingFolderPath = workingFolder.uri.fsPath;
+    this.outputChannel = outputChannel;
 
     const customBundleGemfile: string = vscode.workspace
       .getConfiguration("rubyLsp")
@@ -78,7 +82,9 @@ export class Ruby implements RubyInterface {
     // If the version manager is auto, discover the actual manager before trying to activate anything
     if (this.versionManager === VersionManager.Auto) {
       await this.discoverVersionManager();
-      LOG_CHANNEL.info(`Discovered version manager ${this.versionManager}`);
+      this.outputChannel.info(
+        `Discovered version manager ${this.versionManager}`,
+      );
     }
 
     try {
@@ -168,7 +174,7 @@ export class Ruby implements RubyInterface {
   }
 
   private async activate(ruby: string) {
-    let command = this.shell ? `${this.shell} -ic '` : "";
+    let command = this.shell ? `${this.shell} -i -c '` : "";
 
     // The Ruby activation script is intentionally written as an array that gets joined into a one liner because some
     // terminals cannot handle line breaks. Do not switch this to a multiline string or that will break activation for
@@ -184,7 +190,7 @@ export class Ruby implements RubyInterface {
       command += "'";
     }
 
-    LOG_CHANNEL.info(
+    this.outputChannel.info(
       `Trying to activate Ruby environment with command: ${command} inside directory: ${this.cwd}`,
     );
 
@@ -315,14 +321,14 @@ export class Ruby implements RubyInterface {
 
   private async toolExists(tool: string) {
     try {
-      let command = this.shell ? `${this.shell} -ic '` : "";
+      let command = this.shell ? `${this.shell} -i -c '` : "";
       command += `${tool} --version`;
 
       if (this.shell) {
         command += "'";
       }
 
-      LOG_CHANNEL.info(
+      this.outputChannel.info(
         `Checking if ${tool} is available on the path with command: ${command}`,
       );
 

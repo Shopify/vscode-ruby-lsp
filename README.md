@@ -185,7 +185,7 @@ the version manager configuration, use the following configuration in VS Code to
 
 ```jsonc
 {
-  "rubyLsp.bundleGemfile": "../../path/to/the/directory/Gemfile"
+  "rubyLsp.bundleGemfile": "../../path/to/the/directory/Gemfile",
 }
 ```
 
@@ -208,20 +208,20 @@ This command would generate the following configuration:
       "type": "ruby_lsp",
       "name": "Debug",
       "request": "launch",
-      "program": "ruby ${file}"
+      "program": "ruby ${file}",
     },
     {
       "type": "ruby_lsp",
       "request": "launch",
       "name": "Debug test file",
-      "program": "ruby -Itest ${relativeFile}"
+      "program": "ruby -Itest ${relativeFile}",
     },
     {
       "type": "ruby_lsp",
       "request": "attach",
-      "name": "Attach to existing server"
-    }
-  ]
+      "name": "Attach to existing server",
+    },
+  ],
 }
 ```
 
@@ -256,8 +256,8 @@ These are the settings that may impact the Ruby LSP's behavior and their explana
     "editor.tabSize": 2, // Use 2 spaces for indentation
     "editor.insertSpaces": true, // Use spaces and not tabs for indentantion
     "editor.semanticHighlighting.enabled": true, // Enable semantic highlighting
-    "editor.formatOnType": true // Enable formatting while typing
-  }
+    "editor.formatOnType": true, // Enable formatting while typing
+  },
 }
 ```
 
@@ -286,6 +286,21 @@ workspaces. The Ruby LSP supports this use case out of the box as long as `my_pr
 follows [VS Code's guidelines](https://code.visualstudio.com/docs/editor/workspaces#_multiroot-workspaces) for
 multi-root workspaces.
 
+### Developing on containers
+
+The Ruby LSP is a detached language server, which means it's a background process that runs separately from the VS Code
+instance. To provide its functionality, the Ruby LSP must be running in the same place where your project files exist
+and dependencies are installed.
+
+VS Code supports connecting to containers out of the box, which makes all editor features work seamlessly. That includes
+language servers, the integrated terminal, etc. The VS Code documentation has instructions on how to develop on
+containers locally or remotely. Please check the following resources before opening an issue:
+
+- [Developing inside a Container](https://code.visualstudio.com/docs/devcontainers/containers)
+- [Advanced container configuration](https://code.visualstudio.com/remote/advancedcontainers/overview)
+
+Please note that only Docker is officially supported as a backend by the Dev Container extension. <sup>[1](https://code.visualstudio.com/remote/advancedcontainers/docker-options)</sup>
+
 ## Telemetry
 
 On its own, the Ruby LSP does not collect any telemetry by default, but it does support hooking up to a private metrics
@@ -303,7 +318,7 @@ For example,
 
 ```typescript
 // Create the API class in a private plugin
-class MyApi implements TemeletryApi {
+class MyApi implements TelemetryApi {
   sendEvent(event: TelemetryEvent): Promise<void> {
     // Add timestamp to collected metrics
     const payload = {
@@ -347,7 +362,7 @@ extension in development mode or run tests, set up some breakpoints and start wi
 
 ### Tracing LSP requests and responses
 
-LSP server tracing can be controlled through the `ruby lsp.trace.server` config key in the `.vscode/settings.json`
+LSP server tracing (logging) can be controlled through the `ruby lsp.trace.server` config key in the `.vscode/settings.json`
 config file.
 
 Possible values are:
