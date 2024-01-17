@@ -14,13 +14,15 @@ export class Debugger
 {
   private debugProcess?: ChildProcessWithoutNullStreams;
   private readonly console = vscode.debug.activeDebugConsole;
-  private readonly currentActiveWorkspace: () => Workspace | undefined;
+  private readonly workspaceResolver: (
+    uri: vscode.Uri,
+  ) => Workspace | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
-    currentActiveWorkspace: () => Workspace | undefined,
+    workspaceResolver: (uri: vscode.Uri) => Workspace | undefined,
   ) {
-    this.currentActiveWorkspace = currentActiveWorkspace;
+    this.workspaceResolver = workspaceResolver;
 
     context.subscriptions.push(
       vscode.debug.registerDebugConfigurationProvider("ruby_lsp", this),
@@ -80,14 +82,18 @@ export class Debugger
   // insert defaults for the user. The most important thing is making sure the Ruby environment is a part of it so that
   // we launch using the right bundle and Ruby version
   resolveDebugConfiguration?(
-    _folder: vscode.WorkspaceFolder | undefined,
+    folder: vscode.WorkspaceFolder | undefined,
     debugConfiguration: vscode.DebugConfiguration,
     _token?: vscode.CancellationToken,
   ): vscode.ProviderResult<vscode.DebugConfiguration> {
-    const workspace = this.currentActiveWorkspace();
+    if (!folder) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+
+    const workspace = this.workspaceResolver(folder.uri);
 
     if (!workspace) {
-      throw new Error("Debugging requires a workspace folder to be opened");
+      throw new Error(`Couldn't find workspace ${folder.name}`);
     }
 
     if (debugConfiguration.env) {
@@ -144,32 +150,69 @@ export class Debugger
     return sockets;
   }
 
-  private attachDebuggee(): Promise<vscode.DebugAdapterDescriptor | undefined> {
+  private getSockets(): string[] {
+    const cmd = "bundle exec rdbg --util=list-socks";
+    const workspace = this.currentActiveWorkspace();
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+    let sockets: string[] = [];
+    try {
+      sockets = execSync(cmd, {
+        cwd: workspace.workspaceFolder.uri.fsPath,
+        env: workspace.ruby.env,
+      })
+        .toString()
+        .split("\n")
+        .filter((socket) => socket.length > 0);
+    } catch (error: any) {
+      this.console.append(`Error listing sockets: ${error.message}`);
+    }
+    return sockets;
+  }
+
+  private getSockets(): string[] {
+    const cmd = "bundle exec rdbg --util=list-socks";
+    const workspace = this.currentActiveWorkspace();
+    if (!workspace) {
+      throw new Error("Debugging requires a workspace folder to be opened");
+    }
+    let sockets: string[] = [];
+    try {
+      sockets = execSync(cmd, {
+        cwd: workspace.workspaceFolder.uri.fsPath,
+        env: workspace.ruby.env,
+      })
+        .toString()
+        .split("\n")
+        .filter((socket) => socket.length > 0);
+    } catch (error: any) {
+      this.console.append(`Error listing sockets: ${error.message}`);
+    }
+    return sockets;
+  }
+
+  private async attachDebuggee(): Promise<vscode.DebugAdapterDescriptor> {
     // When using attach, a process will be launched using Ruby debug and it will create a socket automatically. We have
     // to find the available sockets and ask the user which one they want to attach to
+    const sockets = this.getSockets();
+    if (sockets.length === 0) {
+      throw new Error(`No debuggee processes found. Is the process running?`);
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    return new Promise((resolve, reject) => {
-      const sockets = this.getSockets();
-      if (sockets.length === 0) {
-        reject(new Error(`No debuggee processes found.`));
-      } else if (sockets.length === 1) {
-        return resolve(new vscode.DebugAdapterNamedPipeServer(sockets[0]));
-      } else {
-        return vscode.window
-          .showQuickPick(sockets, {
-            placeHolder: "Select a debuggee",
-            ignoreFocusOut: true,
-          })
-          .then((selectedSocket) => {
-            if (selectedSocket === undefined) {
-              reject(new Error("No debuggee selected"));
-            } else {
-              resolve(new vscode.DebugAdapterNamedPipeServer(selectedSocket));
-            }
-          });
-      }
-    });
+    const selectedSocketPath = await vscode.window
+      .showQuickPick(sockets, {
+        placeHolder: "Select a debuggee",
+        ignoreFocusOut: true,
+      })
+      .then((value) => {
+        if (value === undefined) {
+          throw new Error("No debuggee selected");
+        }
+        return path.join(socketsDir, value);
+      });
+
+    return new vscode.DebugAdapterNamedPipeServer(selectedSocketPath);
   }
 
   private spawnDebuggeeForLaunch(
@@ -178,13 +221,13 @@ export class Debugger
     let initialMessage = "";
     let initialized = false;
 
-    const workspace = this.currentActiveWorkspace();
-
-    if (!workspace) {
+    const workspaceFolder = session.workspaceFolder;
+    if (!workspaceFolder) {
       throw new Error("Debugging requires a workspace folder to be opened");
     }
 
-    const cwd = workspace.workspaceFolder.uri.fsPath;
+    const cwd = workspaceFolder.uri.fsPath;
+    const sockPath = this.socketPath(cwd);
     const configuration = session.configuration;
 
     return new Promise((resolve, reject) => {

@@ -31,7 +31,7 @@ export class RubyLsp {
       this.telemetry,
       this.currentActiveWorkspace.bind(this),
     );
-    this.debug = new Debugger(context, this.currentActiveWorkspace.bind(this));
+    this.debug = new Debugger(context, this.getWorkspace.bind(this));
     this.registerCommands(context);
 
     this.statusItems = new StatusItems();
@@ -110,15 +110,41 @@ export class RubyLsp {
 
   private async activateWorkspace(workspaceFolder: vscode.WorkspaceFolder) {
     const workspaceDir = workspaceFolder.uri.fsPath;
+    const customBundleGemfile: string = vscode.workspace
+      .getConfiguration("rubyLsp")
+      .get("bundleGemfile")!;
 
     // If one of the workspaces does not contain a lockfile, then we don't try to start a language server. If the user
     // ends up opening a Ruby file inside that workspace, then we lazily activate the workspace. These need to match our
     // `workspaceContains` activation events in package.json
     if (
+      customBundleGemfile.length === 0 &&
       !(await pathExists(path.join(workspaceDir, "Gemfile.lock"))) &&
-      !(await pathExists(path.join(workspaceDir, "gems.locked")))
+      !(await pathExists(path.join(workspaceDir, "gems.locked"))) &&
+      !this.context.globalState.get("rubyLsp.disableMultirootLockfileWarning")
     ) {
-      return;
+      const answer = await vscode.window.showWarningMessage(
+        `Tried to activate the Ruby LSP in ${workspaceDir}, but no lockfile was found. Are you using a monorepo setup?`,
+        "No - launch without bundle",
+        "Yes - see multi-root workspace docs",
+        "Don't show again",
+      );
+
+      if (answer === "Yes - see multi-root workspace docs") {
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            "https://github.com/Shopify/vscode-ruby-lsp?tab=readme-ov-file#multi-root-workspaces",
+          ),
+        );
+        return;
+      }
+
+      if (answer === "Don't show again") {
+        this.context.globalState.update(
+          "rubyLsp.disableMultirootLockfileWarning",
+          true,
+        );
+      }
     }
 
     const workspace = new Workspace(
@@ -187,7 +213,7 @@ export class RubyLsp {
             .contributes.configuration.properties["rubyLsp.enabledFeatures"]
             .properties;
 
-        const descriptions: { [key: string]: string } = {};
+        const descriptions: Record<string, string> = {};
         Object.entries(enabledFeaturesProperties).forEach(
           ([key, value]: [string, any]) => {
             descriptions[key] = value.description;
@@ -195,7 +221,7 @@ export class RubyLsp {
         );
 
         const configuration = vscode.workspace.getConfiguration("rubyLsp");
-        const features: { [key: string]: boolean } =
+        const features: Record<string, boolean> =
           configuration.get("enabledFeatures")!;
         const allFeatures = Object.keys(features);
         const options: vscode.QuickPickItem[] = allFeatures.map((label) => {

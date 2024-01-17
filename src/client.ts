@@ -18,9 +18,7 @@ import { LOG_CHANNEL, LSP_NAME, ClientInterface } from "./common";
 import { Telemetry, RequestEvent } from "./telemetry";
 import { Ruby } from "./ruby";
 
-interface EnabledFeatures {
-  [key: string]: boolean;
-}
+type EnabledFeatures = Record<string, boolean>;
 
 // Get the executables to start the server based on the user's configuration
 function getLspExecutables(
@@ -33,10 +31,13 @@ function getLspExecutables(
   const branch: string = config.get("branch")!;
   const customBundleGemfile: string = config.get("bundleGemfile")!;
   const useBundlerCompose: boolean = config.get("useBundlerCompose")!;
+  const bypassTypechecker: boolean = config.get("bypassTypechecker")!;
 
   const executableOptions: ExecutableOptions = {
     cwd: workspaceFolder.uri.fsPath,
-    env,
+    env: bypassTypechecker
+      ? { ...env, RUBY_LSP_BYPASS_TYPECHECKER: "true" }
+      : env,
     shell: true,
   };
 
@@ -161,9 +162,8 @@ export default class Client extends LanguageClient implements ClientInterface {
     this.#formatter = "";
   }
 
-  // Perform tasks that can only happen once the custom bundle logic from the server is finalized and the client is
-  // already running
-  performAfterStart() {
+  override async start() {
+    await super.start();
     this.#formatter = this.initializeResult?.formatter;
     this.serverVersion = this.initializeResult?.serverInfo?.version;
   }
