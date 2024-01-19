@@ -376,12 +376,12 @@ Possible values are:
 The `launch.json` contains a 'Minitest - current file' configuration for the debugger.
 
 1. Add a breakpoint using the VS Code UI.
-2. Open the relevant test file.
-3. Open the **Run and Debug** panel on the sidebar.
-4. Ensure `Minitest - current file` is selected in the top dropdown.
-5. Press `F5` OR click the green triangle next to the top dropdown. VS Code will then run the test file with debugger activated.
-6. When the breakpoint is triggered, the process will pause and VS Code will connect to the debugger and activate the debugger UI.
-7. Open the Debug Console view to use the debugger's REPL.
+1. Open the relevant test file.
+1. Open the **Run and Debug** panel on the sidebar.
+1. Ensure `Minitest - current file` is selected in the top dropdown.
+1. Press `F5` OR click the green triangle next to the top dropdown. VS Code will then run the test file with debugger activated.
+1. When the breakpoint is triggered, the process will pause and VS Code will connect to the debugger and activate the debugger UI.
+1. Open the Debug Console view to use the debugger's REPL.
 
 ## License
 
