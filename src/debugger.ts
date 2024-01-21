@@ -104,9 +104,12 @@ export class Debugger
       debugConfiguration.env = workspace.ruby.env;
     }
 
-    debugConfiguration.targetFolder = workspace.workspaceFolder;
-
     const workspacePath = workspace.workspaceFolder.uri.fsPath;
+
+    debugConfiguration.targetFolder = {
+      path: workspacePath,
+      name: workspace.workspaceFolder.name,
+    };
 
     let customGemfilePath = path.join(workspacePath, ".ruby-lsp", "Gemfile");
     if (fs.existsSync(customGemfilePath)) {
@@ -187,8 +190,8 @@ export class Debugger
     let initialized = false;
 
     const configuration = session.configuration;
-    const workspaceFolder: vscode.WorkspaceFolder = configuration.targetFolder;
-    const cwd = workspaceFolder.uri.fsPath;
+    const workspaceFolder = configuration.targetFolder;
+    const cwd = workspaceFolder.path;
 
     return new Promise((resolve, reject) => {
       const args = [
