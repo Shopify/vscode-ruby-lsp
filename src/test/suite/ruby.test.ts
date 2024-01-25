@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+import * as sinon from "sinon";
 import * as vscode from "vscode";
 
 import { Ruby } from "../../ruby";
@@ -32,6 +33,37 @@ suite("Ruby environment activation", () => {
     },
   } as unknown as vscode.ExtensionContext;
   const outputChannel = new WorkspaceChannel("fake", LOG_CHANNEL);
+
+  test("falls through all Ruby environment detection methods", async () => {
+    const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+    const ruby = new Ruby(
+      {
+        uri: { fsPath: tmpPath },
+      } as vscode.WorkspaceFolder,
+      context,
+      outputChannel,
+    );
+    fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby");
+    fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "");
+    fs.writeFileSync(path.join(tmpPath, ".tool-versions"), "");
+    fs.writeFileSync(path.join(tmpPath, ".rtx.toml"), "");
+    fs.writeFileSync(path.join(tmpPath, ".mise.toml"), "");
+
+    const errorMessage =
+      "Could not find a valid Ruby version in any of " +
+      "`.ruby-version`, `.tool-versions`, `.rtx.toml` or `.mise.toml` files";
+    const mock = sinon.mock(ruby);
+    mock
+      .expects("showRubyFallbackDialog")
+      .withArgs(errorMessage)
+      .once()
+      .returns("3.2.2");
+
+    await ruby.activate();
+
+    mock.verify();
+    fs.rmSync(tmpPath, { recursive: true, force: true });
+  });
 
   test("fetches Ruby environment for .ruby-version", async () => {
     const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
@@ -129,6 +161,23 @@ suite("Ruby environment activation", () => {
       outputChannel,
     );
     fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby: '3.2.2'");
+    const rubyEnv = await ruby.activate();
+
+    assertRubyEnv(rubyEnv);
+    fs.rmSync(tmpPath, { recursive: true, force: true });
+  });
+
+  test("falls back to parsing Ruby environment from .ruby-version if dev.yml doesn't contain version", async () => {
+    const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+    const ruby = new Ruby(
+      {
+        uri: { fsPath: tmpPath },
+      } as vscode.WorkspaceFolder,
+      context,
+      outputChannel,
+    );
+    fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby");
+    fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.2.2");
     const rubyEnv = await ruby.activate();
 
     assertRubyEnv(rubyEnv);
