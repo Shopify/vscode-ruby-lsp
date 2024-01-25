@@ -209,22 +209,8 @@ export class Ruby implements RubyInterface {
     engine?: string;
     version: string;
   }> {
-    let contents = await this.searchAndReadFile("dev.yml", false);
-    if (contents) {
-      const match = /- ruby: ('|")?(\d\.\d\.\d)/.exec(contents);
-      const version = match && match[2];
-
-      if (!version) {
-        throw new Error(
-          "Found dev.yml file, but it did not define a Ruby version",
-        );
-      }
-
-      return { version };
-    }
-
     // Try to find a Ruby version in `.ruby-version`. We search parent directories until we find it or hit the root
-    contents = await this.searchAndReadFile(".ruby-version", true);
+    let contents = await this.searchAndReadFile(".ruby-version", true);
 
     // rbenv allows setting a global Ruby version in `~/.rbenv/version`. If we couldn't find a project specific
     // `.ruby-version` file, then we need to check for the global one
@@ -239,13 +225,20 @@ export class Ruby implements RubyInterface {
           contents,
         );
 
-      if (!match || !match.groups) {
-        throw new Error(
-          "Found .ruby-version file, but it did not define a valid Ruby version",
-        );
+      if (match && match.groups) {
+        return { engine: match.groups.engine, version: match.groups.version };
       }
+    }
 
-      return { engine: match.groups.engine, version: match.groups.version };
+    // Try to find a Ruby version in `dev.yml`. We search parent directories until we find it or hit the root
+    contents = await this.searchAndReadFile("dev.yml", false);
+    if (contents) {
+      const match = /- ruby: ('|")?(\d\.\d\.\d)/.exec(contents);
+      const version = match && match[2];
+
+      if (version) {
+        return { version };
+      }
     }
 
     // Try to find a Ruby version in `.tool-versions`. We search parent directories until we find it or hit the root
@@ -254,13 +247,9 @@ export class Ruby implements RubyInterface {
       const match = /ruby (\d\.\d\.\d(-[A-Za-z0-9]+)?)/.exec(contents);
       const version = match && match[1];
 
-      if (!version) {
-        throw new Error(
-          "Found .tool-versions file, but it did not define a Ruby version",
-        );
+      if (version) {
+        return { version };
       }
-
-      return { version };
     }
 
     // Try to find a Ruby version in `.rtx.toml`. Note: rtx has been renamed to mise, which is handled below. We will
@@ -270,13 +259,9 @@ export class Ruby implements RubyInterface {
       const match = /ruby\s+=\s+("|')(.*)("|')/.exec(contents);
       const version = match && match[2];
 
-      if (!version) {
-        throw new Error(
-          "Found .rtx.toml file, but it did not define a Ruby version",
-        );
+      if (version) {
+        return { version };
       }
-
-      return { version };
     }
 
     // Try to find a Ruby version in `.mise.toml`
@@ -285,17 +270,14 @@ export class Ruby implements RubyInterface {
       const match = /ruby\s+=\s+("|')(.*)("|')/.exec(contents);
       const version = match && match[2];
 
-      if (!version) {
-        throw new Error(
-          "Found .mise.toml file, but it did not define a Ruby version",
-        );
+      if (version) {
+        return { version };
       }
-
-      return { version };
     }
 
     throw new Error(
-      "Could not find a configured Ruby version. Searched for .ruby-version and .tools-versions",
+      "Could not find a valid Ruby version in any of `.ruby-version`, `.tool-versions`, `.rtx.toml` " +
+        "or `.mise.toml` files",
     );
   }
 

@@ -30,8 +30,35 @@ suite("Ruby environment activation", () => {
       get: (_name: string) => undefined,
       update: (_name: string, _value: any) => Promise.resolve(),
     },
+    globalState: {
+      get: (_name: string) => undefined,
+      update: (_name: string, _value: any) => Promise.resolve(),
+    },
   } as unknown as vscode.ExtensionContext;
   const outputChannel = new WorkspaceChannel("fake", LOG_CHANNEL);
+
+  test("falls through all Ruby environment detection methods", async () => {
+    const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+    const ruby = new Ruby(
+      {
+        uri: { fsPath: tmpPath },
+      } as vscode.WorkspaceFolder,
+      context,
+      outputChannel,
+    );
+    fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby");
+    fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "");
+    fs.writeFileSync(path.join(tmpPath, ".tool-versions"), "");
+    fs.writeFileSync(path.join(tmpPath, ".rtx.toml"), "");
+    fs.writeFileSync(
+      path.join(tmpPath, ".mise.toml"),
+      `[tools]
+       ruby = '3.3.0'`,
+    );
+
+    await ruby.activate();
+    fs.rmSync(tmpPath, { recursive: true, force: true });
+  });
 
   test("fetches Ruby environment for .ruby-version", async () => {
     const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
@@ -129,6 +156,23 @@ suite("Ruby environment activation", () => {
       outputChannel,
     );
     fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby: '3.3.0'");
+    const rubyEnv = await ruby.activate();
+
+    assertRubyEnv(rubyEnv);
+    fs.rmSync(tmpPath, { recursive: true, force: true });
+  });
+
+  test("falls back to parsing Ruby environment from .ruby-version if dev.yml doesn't contain version", async () => {
+    const tmpPath = fs.mkdtempSync(path.join(os.tmpdir(), "ruby-lsp-test-"));
+    const ruby = new Ruby(
+      {
+        uri: { fsPath: tmpPath },
+      } as vscode.WorkspaceFolder,
+      context,
+      outputChannel,
+    );
+    fs.writeFileSync(path.join(tmpPath, "dev.yml"), "- ruby");
+    fs.writeFileSync(path.join(tmpPath, ".ruby-version"), "3.3.0");
     const rubyEnv = await ruby.activate();
 
     assertRubyEnv(rubyEnv);
