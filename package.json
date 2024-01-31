@@ -23,6 +23,10 @@
     "workspaceContains:Gemfile.lock",
     "workspaceContains:gems.locked"
   ],
+  "enabledApiProposals": [
+    "chatAgents2",
+    "chatRequestAccess"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "menus": {
