@@ -9,7 +9,7 @@ interface DependenciesNode {
 type BundlerTreeNode = Dependency | GemDirectoryPath | GemFilePath;
 
 export class DependenciesTree
-  implements vscode.TreeDataProvider<BundlerTreeNode>
+  implements vscode.TreeDataProvider<BundlerTreeNode>, vscode.Disposable
 {
   private readonly _onDidChangeTreeData: vscode.EventEmitter<any> =
     new vscode.EventEmitter<any>();
@@ -19,9 +19,16 @@ export class DependenciesTree
     this._onDidChangeTreeData.event;
 
   private currentWorkspace: WorkspaceInterface | undefined;
+  private readonly treeView: vscode.TreeView<BundlerTreeNode>;
+  private readonly workspaceListener: vscode.Disposable;
 
-  constructor(context: vscode.ExtensionContext) {
-    STATUS_EMITTER.event((workspace) => {
+  constructor() {
+    this.treeView = vscode.window.createTreeView("dependencies", {
+      treeDataProvider: this,
+      showCollapseAll: true,
+    });
+
+    this.workspaceListener = STATUS_EMITTER.event((workspace) => {
       if (!workspace) {
         return;
       }
@@ -29,10 +36,11 @@ export class DependenciesTree
       this.currentWorkspace = workspace;
       this.refresh();
     });
+  }
 
-    context.subscriptions.push(
-      vscode.window.createTreeView("dependencies", { treeDataProvider: this }),
-    );
+  dispose(): void {
+    this.workspaceListener.dispose();
+    this.treeView.dispose();
   }
 
   getTreeItem(
