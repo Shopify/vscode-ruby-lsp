@@ -29,7 +29,7 @@ export class DependenciesTree
     });
 
     this.workspaceListener = STATUS_EMITTER.event((workspace) => {
-      if (!workspace) {
+      if (!workspace || workspace === this.currentWorkspace) {
         return;
       }
 
