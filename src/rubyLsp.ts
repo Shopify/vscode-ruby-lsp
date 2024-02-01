@@ -10,6 +10,7 @@ import { Command, STATUS_EMITTER, pathExists } from "./common";
 import { VersionManager } from "./ruby";
 import { StatusItems } from "./status";
 import { TestController } from "./testController";
+import { MigrationController } from "./migrationController";
 import { Debugger } from "./debugger";
 
 // The RubyLsp class represents an instance of the entire extension. This should only be instantiated once at the
@@ -21,12 +22,18 @@ export class RubyLsp {
   private readonly context: vscode.ExtensionContext;
   private readonly statusItems: StatusItems;
   private readonly testController: TestController;
+  private readonly migrationController: MigrationController;
   private readonly debug: Debugger;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.telemetry = new Telemetry(context);
     this.testController = new TestController(
+      context,
+      this.telemetry,
+      this.currentActiveWorkspace.bind(this),
+    );
+    this.migrationController = new MigrationController(
       context,
       this.telemetry,
       this.currentActiveWorkspace.bind(this),
@@ -327,6 +334,12 @@ export class RubyLsp {
       vscode.commands.registerCommand(
         Command.DebugTest,
         this.testController.debugTest.bind(this.testController),
+      ),
+      vscode.commands.registerCommand(
+        Command.RunMigrationInTerminal,
+        this.migrationController.runMigrationInTerminal.bind(
+          this.migrationController,
+        ),
       ),
     );
   }

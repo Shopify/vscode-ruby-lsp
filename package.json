@@ -84,6 +84,12 @@
         "when": "editorActive && editorLangId == ruby"
       },
       {
+        "command": "rubyLsp.runMigrationInTerminal",
+        "title": "Run current migration in terminal",
+        "category": "Ruby LSP",
+        "when": "editorActive && editorLangId == ruby"
+      },
+      {
         "command": "rubyLsp.showSyntaxTree",
         "title": "Show syntax tree",
         "category": "Ruby LSP"
