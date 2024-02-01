@@ -11,6 +11,7 @@ import { VersionManager } from "./ruby";
 import { StatusItems } from "./status";
 import { TestController } from "./testController";
 import { Debugger } from "./debugger";
+import { DependenciesTree } from "./dependenciesTree";
 
 // The RubyLsp class represents an instance of the entire extension. This should only be instantiated once at the
 // activation event. One instance of this class controls all of the existing workspaces, telemetry and handles all
@@ -22,6 +23,7 @@ export class RubyLsp {
   private readonly statusItems: StatusItems;
   private readonly testController: TestController;
   private readonly debug: Debugger;
+  //   private readonly dependenciesTree: DependenciesTree;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -32,6 +34,8 @@ export class RubyLsp {
       this.currentActiveWorkspace.bind(this),
     );
     this.debug = new Debugger(context, this.workspaceResolver.bind(this));
+    // eslint-disable-next-line no-new
+    new DependenciesTree(context);
     this.registerCommands(context);
 
     this.statusItems = new StatusItems();
