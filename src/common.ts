@@ -21,6 +21,7 @@ export enum Command {
   DebugTest = "rubyLsp.debugTest",
   OpenLink = "rubyLsp.openLink",
   ShowSyntaxTree = "rubyLsp.showSyntaxTree",
+  OpenFile = "rubyLsp.openFile",
 }
 
 export interface RubyInterface {
