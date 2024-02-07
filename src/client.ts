@@ -131,6 +131,7 @@ export default class Client extends LanguageClient implements ClientInterface {
   private readonly baseFolder;
   private requestId = 0;
 
+  #outputChannel: WorkspaceChannel;
   #context: vscode.ExtensionContext;
   #formatter: string;
 
@@ -162,6 +163,7 @@ export default class Client extends LanguageClient implements ClientInterface {
     this.createTestItems = createTestItems;
     this.#context = context;
     this.ruby = ruby;
+    this.#outputChannel = outputChannel;
     this.#formatter = "";
   }
 
@@ -254,6 +256,11 @@ export default class Client extends LanguageClient implements ClientInterface {
       telemetryData.errorMessage = error.data.errorMessage;
       telemetryData.backtrace = error.data.backtrace;
       errorResult = error;
+
+      // Also display errors in the output channel. The intention is to make it easier for users to report issues
+      this.#outputChannel.error(
+        `Server error: ${telemetryData.errorClass} - ${telemetryData.errorMessage}\n\n${telemetryData.backtrace}`,
+      );
     }
     Perf.mark(`${benchmarkId}.end`);
 
