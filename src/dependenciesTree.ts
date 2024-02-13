@@ -126,11 +126,17 @@ export class DependenciesTree
   }
 
   private revealElement(element: BundlerTreeNode): void {
-    this.treeView.reveal(element, {
-      select: true,
-      focus: false,
-      expand: true,
-    });
+    const autoReveal: boolean | undefined = vscode.workspace
+      .getConfiguration("explorer")
+      .get("autoReveal");
+
+    if (autoReveal) {
+      this.treeView.reveal(element, {
+        select: true,
+        focus: false,
+        expand: true,
+      });
+    }
 
     this.currentVisibleItem = undefined;
   }
