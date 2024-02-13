@@ -1,3 +1,5 @@
+import path from "path";
+
 import * as vscode from "vscode";
 
 import { STATUS_EMITTER, WorkspaceInterface } from "./common";
@@ -64,8 +66,9 @@ export class DependenciesTree
 
   getParent(element: BundlerTreeNode): vscode.ProviderResult<BundlerTreeNode> {
     const parentUri = vscode.Uri.joinPath(element.resourceUri, "..");
+    const rootPath = path.parse(parentUri.path).root;
 
-    if (parentUri.path === "/") {
+    if (parentUri.path === rootPath) {
       return undefined;
     }
 
